@@ -1,0 +1,285 @@
+:root {
+    --primary-color: #3B82F6; /* A modern blue */
+    --secondary-color: #10B981; /* A modern green */
+    --bg-color: #F3F4F6; /* Light gray background */
+    --card-bg-color: #ffffff;
+    --text-color: #1F2937; /* Darker gray for text */
+    --light-text-color: #6B7280; /* Lighter gray for labels */
+    --border-color: #E5E7EB;
+    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --font-family: 'Roboto', 'Noto Sans TC', sans-serif;
+}
+ 
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 2rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+ 
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+ 
+header {
+    text-align: center;
+}
+ 
+header h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    margin: 0;
+}
+ 
+header p {
+    margin: 0.5rem 0 0;
+    color: var(--light-text-color);
+    font-size: 1.1rem;
+}
+ 
+.pricer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1.5rem;
+}
+ 
+.card {
+    background-color: var(--card-bg-color);
+    border-radius: 0.75rem;
+    padding: 1.75rem;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.3s ease;
+}
+.card:hover {
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+ 
+.card h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+ 
+.icon {
+    font-size: 1.5em;
+    color: var(--primary-color);
+}
+ 
+.form-group {
+    margin-bottom: 1.25rem;
+}
+ 
+.form-group:last-child {
+    margin-bottom: 0;
+}
+ 
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--light-text-color);
+    font-weight: 500;
+}
+ 
+input[type="number"], input[type="text"], select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    box-sizing: border-box;
+    font-size: 1rem;
+    font-family: var(--font-family);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+ 
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+ 
+.yield-curve-grid {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 0.75rem;
+    align-items: center;
+}
+ 
+.actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+ 
+button {
+    padding: 0.8rem 2rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+ 
+#calculateBtn {
+    background-color: var(--primary-color);
+    color: white;
+}
+#calculateBtn:hover {
+    background-color: #2563EB;
+}
+ 
+#displayTreeBtn {
+    background-color: var(--secondary-color);
+    color: white;
+}
+#displayTreeBtn:hover:not(:disabled) {
+    background-color: #059669;
+}
+#displayTreeBtn:disabled {
+    background-color: #D1D5DB;
+    cursor: not-allowed;
+}
+ 
+.results-card {
+    margin-top: 1rem;
+}
+ 
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.result-item:first-child {
+    padding-top: 0;
+}
+.result-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.result-item strong {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+ 
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(5px);
+}
+.modal-content {
+    background-color: var(--bg-color);
+    margin: 3% auto;
+    padding: 2rem;
+    border-radius: 0.75rem;
+    width: 95%;
+    max-width: 1600px;
+    height: 90%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+.close-btn {
+    color: #9CA3AF;
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.close-btn:hover {
+    color: var(--text-color);
+}
+#tree-info {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    color: var(--light-text-color);
+}
+#tree-container-wrapper {
+    flex-grow: 1;
+    overflow: auto; /* Enable scrolling for the tree container */
+}
+#tree-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 1rem;
+    min-width: fit-content; /* Important for horizontal scrolling */
+    min-height: 100%;
+}
+.tree-step {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 15px;
+    height: 100%;
+}
+.tree-node {
+    border: 1px solid var(--primary-color);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+    width: 150px;
+    background: #fff;
+    font-size: 0.8rem;
+    box-shadow: var(--shadow);
+    position: relative; /* For arrows */
+}
+.tree-node-content {
+    padding: 2px 0;
+}
+.tree-node .price-label {
+    font-size: 0.7rem;
+    color: var(--light-text-color);
+}
+.tree-node .node-bond-price { font-weight: bold; }
+.tree-node .node-option-price { color: #D97706; font-weight: bold; } /* Amber color */
+.tree-node .node-rate {
+    background-color: #F3F4F6;
+    border-radius: 3px;
+    margin-top: 5px;
+    padding: 2px;
+    font-family: monospace;
+    font-weight: 500;
+}
+.early-exercise {
+    border-color: #EF4444; /* Red color */
+    border-width: 2px;
+}
+.probabilities {
+    font-size: 0.75rem;
+    color: #6B7280;
+    margin-top: 5px;
+    text-align: left;
+    padding-left: 5px;
+}

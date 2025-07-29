@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可贖回債券評價模型 (Hull-White 1F)</title>
+    <link rel="stylesheet" href="style.css">
+    <link href=https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Roboto:wght@300;400;500&display=swap rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>可贖回債券評價模型</h1>
+            <p>使用 Hull-White 單因子三元利率樹</p>
+        </header>
+ 
+        <div class="pricer-grid">
+            <!-- Bond Data Section -->
+            <div class="card">
+                <h2><span class="icon">📄</span> 債券資料</h2>
+                <div class="form-group">
+                    <label for="principal">本金 (Principal)</label>
+                    <input type="number" id="principal" value="100">
+                </div>
+                <div class="form-group">
+                    <label for="marketPrice">市場價格 (Market Price)</label>
+                    <input type="number" id="marketPrice" placeholder="用於計算 OAS" value="100">
+                </div>
+                <div class="form-group">
+                    <label for="couponRate">票面利率 (Coupon Rate, %)</label>
+                    <input type="number" id="couponRate" value="4.5">
+                </div>
+                <div class="form-group">
+                    <label for="maturity">到期年限 (Maturity, Years)</label>
+                    <input type="number" id="maturity" value="3">
+                </div>
+                <div class="form-group">
+                    <label for="couponFreq">付息頻率 (Coupon Frequency)</label>
+                    <select id="couponFreq">
+                        <option value="2" selected>半年一次 (Semi-Annual)</option>
+                        <option value="1">一年一次 (Annual)</option>
+                        <option value="4">一季一次 (Quarterly)</option>
+                    </select>
+                </div>
+                 <div class="form-group">
+                    <label for="strikePrice">贖回價 (Strike Price, /100)</label>
+                    <input type="number" id="strikePrice" value="100">
+                </div>
+                <div class="form-group">
+                    <label for="callStructure">贖回結構 (Call Structure)</label>
+                    <input type="text" id="callStructure" placeholder="e.g. NC6Mx1M" value="NC6Mx1M">
+                </div>
+            </div>
+ 
+            <!-- Model Parameters Section -->
+            <div class="card">
+                <h2><span class="icon">⚙️</span> HW1F 模型參數</h2>
+                <div class="form-group">
+                    <label for="meanReversion">均值回歸 (Mean Reversion, a, %)</label>
+                    <input type="number" id="meanReversion" value="3.0">
+                </div>
+                <div class="form-group">
+                    <label for="volatility">短期利率波動率 (Volatility, σ, %)</label>
+                    <input type="number" id="volatility" value="1.08">
+                </div>
+                 <div class="form-group">
+                    <label for="treeSteps">每年樹的步數 (Tree Steps per Year)</label>
+                    <input type="number" id="treeSteps" value="12">
+                </div>
+                <div class="form-group">
+                    <label for="spread">信用利差 (Credit Spread, bps)</label>
+                    <input type="number" id="spread" value="0">
+                </div>
+            </div>
+ 
+            <!-- Yield Curve Section -->
+            <div class="card">
+                <h2><span class="icon">📈</span> 殖利率曲線 (Yield Curve, %)</h2>
+                <div class="yield-curve-grid">
+                    <label>3M</label><input type="number" class="yc-input" data-tenor="0.25" value="4.314">
+                    <label>6M</label><input type="number" class="yc-input" data-tenor="0.5" value="4.295">
+                    <label>1Y</label><input type="number" class="yc-input" data-tenor="1" value="4.103">
+                    <label>2Y</label><input type="number" class="yc-input" data-tenor="2" value="3.954">
+                    <label>3Y</label><input type="number" class="yc-input" data-tenor="3" value="3.901">
+                    <label>5Y</label><input type="number" class="yc-input" data-tenor="5" value="3.992">
+                    <label>7Y</label><input type="number" class="yc-input" data-tenor="7" value="4.391">
+                    <label>10Y</label><input type="number" class="yc-input" data-tenor="10" value="4.391">
+                </div>
+            </div>
+        </div>
+ 
+        <div class="actions">
+            <button id="calculateBtn">計算價格</button>
+            <button id="displayTreeBtn" disabled>顯示利率樹</button>
+        </div>
+ 
+        <div class="results-card card" id="results" style="display:none;">
+            <h2><span class="icon">📊</span> 計算結果</h2>
+            <div class="result-item">
+                <span>無選擇權債券價格 (Option-Free Bond Price):</span>
+                <strong id="optionFreePrice"></strong>
+            </div>
+            <div class="result-item">
+                <span>可贖回債券價格 (Callable Bond Price):</span>
+                <strong id="callableBondPrice"></strong>
+            </div>
+             <div class="result-item">
+                <span>隱含選擇權價值 (Embedded Option Value):</span>
+                <strong id="optionValue"></strong>
+            </div>
+            <div class="result-item">
+                <span>模型隱含殖利率 (Model-Implied Yield, %):</span>
+                <strong id="impliedYield"></strong>
+            </div>
+            <div class="result-item">
+                <span>選擇權調整利差 (OAS, bps):</span>
+                <strong id="oas"></strong>
+            </div>
+        </div>
+    </div>
+ 
+    <!-- Modal for Tree Display -->
+    <div id="treeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>利率三元樹詳細結果</h2>
+            <div id="tree-info"></div>
+            <div id="tree-container-wrapper">
+                <div id="tree-container"></div>
+            </div>
+        </div>
+    </div>
+ 
+    <script src="script.js"></script>
+</body>
+</html>
