@@ -1,136 +1,1945 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>可贖回債券評價模型 (Hull-White 1F)</title>
-    <link rel="stylesheet" href="style.css">
-    <link href=https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Roboto:wght@300;400;500&display=swap rel="stylesheet">
+    <title>Callable Bond Pricer (Hull-White 1F) - Enhanced</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'input-bg': '#F3F8FF',
+                        'calc-bg': '#E0E7FF',
+                    }
+                },
+            },
+        };
+    </script>
+   
+    <style>
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .tab-button { transition: all 0.3s ease; border-bottom: 3px solid transparent; }
+        .tab-button.active { border-bottom-color: #3B82F6; color: #3B82F6; font-weight: 600; }
+        .sub-tab-button { transition: all 0.3s ease; border-radius: 6px; }
+        .sub-tab-button.active { background-color: #E0E7FF; color: #3B82F6; font-weight: 500; }
+        .user-input { background-color: theme('colors.input-bg'); }
+        .auto-calc-input { background-color: theme('colors.calc-bg'); font-weight: 500; }
+        .auto-calc-input:read-only { color: theme('colors.gray.700'); }
+        .auto-calc-output {
+            background-color: theme('colors.calc-bg');
+            font-weight: 500;
+            color: theme('colors.gray.700');
+        }
+        .editable-table td[contenteditable="true"] {
+            background-color: theme('colors.input-bg');
+            padding: 8px 10px;
+            border-radius: 4px;
+        }
+        .editable-table td[contenteditable="true"]:focus {
+            outline: 2px solid theme('colors.blue.500');
+            background-color: #fff;
+        }
+        .editable-table .delete-row-btn {
+            cursor: pointer;
+            color: theme('colors.red.500');
+            font-weight: bold;
+            padding: 0 8px;
+            border-radius: 50%;
+        }
+        .editable-table .delete-row-btn:hover { background-color: theme('colors.red.100'); }
+        .editable-table td.calc-cell {
+            background-color: #f9fafb;
+            color: #1f2937;
+            font-size: 0.8rem;
+        }
+        .custom-alert {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .custom-alert-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            position: relative;
+        }
+        .custom-alert-close-btn {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .custom-alert-close-btn:hover { color: #000; }
+        #loading-overlay {
+            position: fixed;
+            z-index: 2000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            color: #3B82F6;
+            font-weight: 500;
+            display: none; /* Hidden by default */
+        }
+        #loading-overlay .spinner {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3B82F6; /* Blue */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #tree-info {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 0.9rem;
+            color: #6B7280;
+        }
+        #tree-container-wrapper {
+            height: 600px; /* Fixed height for scrolling */
+            overflow: auto;
+            background: #F9FAFB;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        #tree-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 1rem;
+            min-width: fit-content;
+            min-height: 100%;
+        }
+        .tree-step {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            gap: 15px;
+            height: 100%;
+        }
+        .tree-node {
+            border: 1px solid #3B82F6;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+            width: 160px;
+            background: #fff;
+            font-size: 0.8rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        .tree-node-content { padding: 2px 0; }
+        .tree-node .price-label {
+            font-size: 0.7rem;
+            color: #6B7280;
+            text-transform: uppercase;
+        }
+        .tree-node .node-bond-price { font-weight: 600; color: #1E40AF; }
+        .tree-node .node-option-price { font-weight: 600; color: #166534; }
+        .tree-node .node-option-value { font-weight: 600; color: #991B1B; }
+        .tree-node .node-rate { font-weight: 600; font-size: 0.85rem; }
+       
+        .node-probabilities {
+            font-size: 0.7rem;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed #D1D5DB;
+            color: #4B5563;
+        }
+       
+        /* Tree node content (now controlled by JS) */
+        .tree-node .tree-data-vanilla,
+        .tree-node .tree-data-callable,
+        .tree-node .tree-data-option,
+        .tree-node .tree-data-rate,
+        .tree-node .tree-data-probs {
+            display: block;
+        }
+       
+        /* SOP Tab Styles */
+        .sop-content {
+            line-height: 1.7;
+        }
+        .sop-content h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.25rem;
+        }
+        .sop-content ol {
+            list-style-type: decimal;
+            margin-left: 1.5rem;
+        }
+        .sop-content li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>可贖回債券評價模型</h1>
-            <p>使用 Hull-White 單因子三元利率樹</p>
+<body class="bg-gray-100 text-gray-900 font-sans p-4 md:p-8">
+ 
+    <div class="container max-w-7xl mx-auto flex flex-col gap-6">
+       
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-blue-700">Callable Bond Pricing Model</h1>
+            <p class="text-lg text-gray-600">Using Hull-White 1F Trinomial Tree</p>
         </header>
  
-        <div class="pricer-grid">
-            <!-- Bond Data Section -->
-            <div class="card">
-                <h2><span class="icon">📄</span> 債券資料</h2>
-                <div class="form-group">
-                    <label for="principal">本金 (Principal)</label>
-                    <input type="number" id="principal" value="100">
-                </div>
-                <div class="form-group">
-                    <label for="marketPrice">市場價格 (Market Price)</label>
-                    <input type="number" id="marketPrice" placeholder="用於計算 OAS" value="100">
-                </div>
-                <div class="form-group">
-                    <label for="couponRate">票面利率 (Coupon Rate, %)</label>
-                    <input type="number" id="couponRate" value="4.5">
-                </div>
-                <div class="form-group">
-                    <label for="maturity">到期年限 (Maturity, Years)</label>
-                    <input type="number" id="maturity" value="3">
-                </div>
-                <div class="form-group">
-                    <label for="couponFreq">付息頻率 (Coupon Frequency)</label>
-                    <select id="couponFreq">
-                        <option value="2" selected>半年一次 (Semi-Annual)</option>
-                        <option value="1">一年一次 (Annual)</option>
-                        <option value="4">一季一次 (Quarterly)</option>
-                    </select>
-                </div>
-                 <div class="form-group">
-                    <label for="strikePrice">贖回價 (Strike Price, /100)</label>
-                    <input type="number" id="strikePrice" value="100">
-                </div>
-                <div class="form-group">
-                    <label for="callStructure">贖回結構 (Call Structure)</label>
-                    <input type="text" id="callStructure" placeholder="e.g. NC6Mx1M" value="NC6Mx1M">
-                </div>
+        <nav class="bg-white rounded-lg shadow-md p-2">
+            <div class="flex space-x-4 border-b border-gray-200">
+                <button class="tab-button py-3 px-4 text-gray-600 text-sm md:text-base active" data-tab="pricingTab">
+                    Pricing
+                </button>
+                <button class="tab-button py-3 px-4 text-gray-600 text-sm md:text-base" data-tab="calibrationTab">
+                    Calibration
+                </button>
+                <button class="tab-button py-3 px-4 text-gray-600 text-sm md:text-base" data-tab="treeTab">
+                    Tree
+                </button>
+                <button class="tab-button py-3 px-4 text-gray-600 text-sm md:text-base" data-tab="sopTab">
+                    SOP
+                </button>
             </div>
+        </nav>
  
-            <!-- Model Parameters Section -->
-            <div class="card">
-                <h2><span class="icon">⚙️</span> HW1F 模型參數</h2>
-                <div class="form-group">
-                    <label for="meanReversion">均值回歸 (Mean Reversion, a, %)</label>
-                    <input type="number" id="meanReversion" value="3.0">
-                </div>
-                <div class="form-group">
-                    <label for="volatility">短期利率波動率 (Volatility, σ, %)</label>
-                    <input type="number" id="volatility" value="1.08">
-                </div>
-                 <div class="form-group">
-                    <label for="treeSteps">每年樹的步數 (Tree Steps per Year)</label>
-                    <input type="number" id="treeSteps" value="12">
-                </div>
-                <div class="form-group">
-                    <label for="spread">信用利差 (Credit Spread, bps)</label>
-                    <input type="number" id="spread" value="0">
-                </div>
-            </div>
- 
-            <!-- Yield Curve Section -->
-            <div class="card">
-                <h2><span class="icon">📈</span> 殖利率曲線 (Yield Curve, %)</h2>
-                <div class="yield-curve-grid">
-                    <label>3M</label><input type="number" class="yc-input" data-tenor="0.25" value="4.314">
-                    <label>6M</label><input type="number" class="yc-input" data-tenor="0.5" value="4.295">
-                    <label>1Y</label><input type="number" class="yc-input" data-tenor="1" value="4.103">
-                    <label>2Y</label><input type="number" class="yc-input" data-tenor="2" value="3.954">
-                    <label>3Y</label><input type="number" class="yc-input" data-tenor="3" value="3.901">
-                    <label>5Y</label><input type="number" class="yc-input" data-tenor="5" value="3.992">
-                    <label>7Y</label><input type="number" class="yc-input" data-tenor="7" value="4.391">
-                    <label>10Y</label><input type="number" class="yc-input" data-tenor="10" value="4.391">
-                </div>
-            </div>
+        <!-- Loading Overlay -->
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <span id="loading-message">Calculating...</span>
         </div>
  
-        <div class="actions">
-            <button id="calculateBtn">計算價格</button>
-            <button id="displayTreeBtn" disabled>顯示利率樹</button>
-        </div>
+        <main>
+            <!-- ============================================= -->
+            <!-- Pricing Tab -->
+            <!-- ============================================= -->
+            <div id="pricingTab" class="tab-content-item space-y-6">
+               
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                   
+                    <!-- Left Column (2/3) -->
+                    <div class="lg:col-span-2 space-y-6">
+                       
+                        <div class="bg-white rounded-lg shadow-md p-6 h-full">
+                           
+                            <div class="flex space-x-2 bg-gray-100 p-1 rounded-lg mb-4">
+                                <button class="sub-tab-button flex-1 py-2 px-3 text-sm text-gray-600 active" data-subtab="bondTab">Bond</button>
+                                <button class="sub-tab-button flex-1 py-2 px-3 text-sm text-gray-600" data-subtab="callScheduleTab">Call Schedule</button>
+                                <button class="sub-tab-button flex-1 py-2 px-3 text-sm text-gray-600" data-subtab="resultTab">Result</button>
+                            </div>
  
-        <div class="results-card card" id="results" style="display:none;">
-            <h2><span class="icon">📊</span> 計算結果</h2>
-            <div class="result-item">
-                <span>無選擇權債券價格 (Option-Free Bond Price):</span>
-                <strong id="optionFreePrice"></strong>
+                            <!-- Sub-tab Content -->
+                            <div id="bondTab" class="sub-tab-content-item">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                                    <div>
+                                        <label for="principal" class="block text-sm font-medium text-gray-600">Principal</label>
+                                        <input type="number" id="principal" value="100" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                    </div>
+                                    <div>
+                                        <label for="couponRate" class="block text-sm font-medium text-gray-600">Coupon Rate (%)</label>
+                                        <input type="number" id="couponRate" value="4.5" step="0.1" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                    </div>
+                                    <div>
+                                        <label for="maturity" class="block text-sm font-medium text-gray-600">Maturity (Yrs)</label>
+                                        <input type="number" id="maturity" value="3" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                    </div>
+                                    <div>
+                                        <label for="frequency" class="block text-sm font-medium text-gray-600">Coupon Frequency</label>
+                                        <select id="frequency" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                            <option value="12">Monthly</option>
+                                            <option value="4">Quarterly</option>
+                                            <option value="2" selected>Semi-Annually</option>
+                                            <option value="1">Annually</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label for="marketPrice" class="block text-sm font-medium text-gray-600">Market Price</label>
+                                        <input type="number" id="marketPrice" value="100" placeholder="e.g., 99.5" step="0.01" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                    </div>
+                                    <div></div> <!-- Empty column -->
+                                   
+                                    <div class="md:col-span-3 border-t my-2"></div>
+                                   
+                                    <div>
+                                        <label for="modelPrice" class="block text-sm font-medium text-gray-600">Model Price</label>
+                                        <input type="number" id="modelPrice" placeholder="Calculated" step="0.01" readonly class="mt-1 w-full p-2 border rounded-md auto-calc-output">
+                                    </div>
+                                    
+                                    <div>
+                                        <label for="modelYield" class="block text-sm font-medium text-gray-600">Model Yield (YTM, %)</label>
+                                        <input type="number" id="modelYield" placeholder="Calculated" step="0.01" readonly class="mt-1 w-full p-2 border rounded-md auto-calc-output">
+                                    </div>
+                                    
+                                    <div>
+                                        <label for="spread" class="block text-sm font-medium text-gray-600">Spread (OAS, bps)</label>
+                                        <input type="text" id="spread" placeholder="Calculated" readonly class="mt-1 w-full p-2 border rounded-md auto-calc-output">
+                                    </div>
+                                    
+                                    <div class="md:col-span-3">
+                                        <p class="text-xs text-gray-500">
+                                            OAS: Solved from Market Price. Model Price: Calculated using Z-Spread (OAS=0).
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+ 
+                            <div id="callScheduleTab" class="sub-tab-content-item hidden">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div>
+                                        <label for="callScheduleText" class="block text-sm font-medium text-gray-600">Call Schedule (Text)</label>
+                                        <input type="text" id="callScheduleText" value="NC1Yx1Y" placeholder="e.g., NC1Yx1Y or NC6Mx1M" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                        <p class="text-xs text-gray-500 mt-1">Parses NC[T]Y/M x [P]Y/M format. Clear this field for a vanilla bond.</p>
+                                    </div>
+                                    <div></div>
+                                   
+                                    <div>
+                                        <label for="callPrice" class="block text-sm font-medium text-gray-600">Call Price(s)</label>
+                                        <input type="text" id="callPrice" value="100" placeholder="e.g., 100 or 102, 101, 100" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                        <p class="text-xs text-gray-500 mt-1">Single value or comma-separated list.</p>
+                                    </div>
+                                    <div>
+                                        <label for="callStructure" class="block text-sm font-medium text-gray-600">Call Structure (Years)</label>
+                                        <input type="text" id="callStructure" placeholder="Auto-parsed or manual" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                                        <p class="text-xs text-gray-500 mt-1">Auto-parsed or comma-separated list.</p>
+                                    </div>
+                                </div>
+                            </div>
+ 
+                            <div id="resultTab" class="sub-tab-content-item hidden">
+                                <div id="analysis-results" class="mt-6 space-y-3">
+                                    <h3 class="text-lg font-semibold text-gray-700">Model Analysis</h3>
+                                    <p class="text-sm text-gray-500">
+                                        The following analysis is based on the <strong>Model Price</strong> calculated with Z-Spread (OAS=0).
+                                    </p>
+                                    <div class="p-4 bg-gray-50 rounded-lg space-y-2">
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Vanilla Bond Price:</span>
+                                            <strong id="analysis_vanilla" class="text-gray-900">...</strong>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">(-) Embedded Option Value:</span>
+                                            <strong id="analysis_option" class="text-red-600">...</strong>
+                                        </div>
+                                        <hr>
+                                        <div class="flex justify-between text-base font-semibold">
+                                            <span class="text-gray-800">Callable Bond Price:</span>
+                                            <strong id="analysis_callable" class="text-blue-700">...</strong>
+                                        </div>
+                                    </div>
+                                   
+                                    <div class="p-4 bg-gray-50 rounded-lg space-y-2 mt-4">
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Model-Implied Yield (YTM, %):</span>
+                                            <strong id="analysis_implied_yield" class="text-gray-900">...</strong>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Z-Spread (bps):</span>
+                                            <strong id="analysis_z_spread" class="text-gray-900">...</strong>
+                                        </div>
+                                         <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Option-Adjusted Spread (OAS, bps):</span>
+                                            <strong id="analysis_oas" class="text-gray-900">...</strong>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Option Cost (bps):</span>
+                                            <strong id="analysis_option_cost" class="text-gray-900">...</strong>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-gray-600">Effective Duration:</span>
+                                            <strong id="analysis_eff_duration" class="text-gray-900">...</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="call-probability-results" class="mt-6 space-y-3">
+                                     <h3 class="text-lg font-semibold text-gray-700">Call Probabilities (Risk-Neutral)</h3>
+                                     <div id="call-prob-container" class="p-4 bg-gray-50 rounded-lg space-y-2">
+                                         <p class="text-sm text-gray-500">...</p>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                   
+                    <!-- Right Column (1/3) -->
+                    <div class="lg:col-span-1 bg-white rounded-lg shadow-md p-6 flex flex-col h-full">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h2 class="text-xl font-semibold text-gray-800">
+                                Discount Curve
+                            </h2>
+                            <div class="flex items-center space-x-2">
+                                <label for="zSpread" class="block text-sm font-medium text-gray-600">Z-Spread (bps)</label>
+                                <input type="number" id="zSpread" value="0" class="w-20 p-2 border rounded-md user-input model-input">
+                            </div>
+                        </div>
+                       
+                        <div class="flex-grow overflow-y-auto pr-2">
+                            <table id="discountCurveTable" class="w-full text-sm text-left editable-table">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                    <tr>
+                                        <th scope="col" class="py-2 px-3">Term (Yrs)</th>
+                                        <th scope="col" class="py-2 px-3">Rate (%)</th>
+                                        <th scope="col" class="py-2 px-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="curveTableBody">
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">0.25</td><td contenteditable="true" class="py-2 px-3">4.314</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">0.5</td><td contenteditable="true" class="py-2 px-3">4.295</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">1.0</td><td contenteditable="true" class="py-2 px-3">4.103</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">2.0</td><td contenteditable="true" class="py-2 px-3">3.954</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">3.0</td><td contenteditable="true" class="py-2 px-3">3.901</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">5.0</td><td contenteditable="true" class="py-2 px-3">3.992</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">7.0</td><td contenteditable="true" class="py-2 px-3">4.391</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    <tr class="border-b"><td contenteditable="true" class="py-2 px-3">10.0</td><td contenteditable="true" class="py-2 px-3">4.391</td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                    </tbody>
+                            </table>
+                        </div>
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button id="addCurveRowBtn" class="bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-300">
+                                + Add Data
+                            </button>
+                            <button id="confirmCurveBtn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300">
+                                Confirm
+                            </button>
+                        </div>
+                        <div id="curveStatus" class="text-xs text-green-600 mt-2 text-center"></div>
+                    </div>
+ 
+                </div>
             </div>
-            <div class="result-item">
-                <span>可贖回債券價格 (Callable Bond Price):</span>
-                <strong id="callableBondPrice"></strong>
+ 
+            <!-- ============================================= -->
+            <!-- Calibration Tab -->
+            <!-- ============================================= -->
+            <div id="calibrationTab" class="tab-content-item hidden p-4 space-y-6">
+               
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
+                        HW Model Parameters
+                    </h2>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Model parameters (a, σ, Time Steps) are shared between pricing and calibration.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label for="cal_a" class="block text-sm font-medium text-gray-600">Mean Reversion (a, %)</label>
+                            <input type="number" id="cal_a" value="3" step="0.1" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                        </div>
+                        <div>
+                            <label for="cal_sigma" class="block text-sm font-medium text-gray-600">Volatility (σ, %)</label>
+                            <input type="number" id="cal_sigma" value="1.08" step="0.01" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                        </div>
+                        <div>
+                            <label for="timesteps" class="block text-sm font-medium text-gray-600">Time Steps (per year)</label>
+                            <input type="number" id="timesteps" value="12" min="4" max="52" class="mt-1 w-full p-2 border rounded-md user-input model-input">
+                        </div>
+                    </div>
+                </div>
+ 
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800">
+                            Caplet Market Data (Calibration Tool)
+                        </h2>
+                        <div class="flex flex-col md:flex-row md:space-x-4 items-baseline">
+                            <span class="text-sm font-medium text-gray-700">Total Cost:</span>
+                            <strong id="cal_total_cost" class="text-lg text-blue-700">0.00</strong>
+                            <button id="runCalibrationBtn" class="w-full mt-2 md:mt-0 md:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300">
+                                Run Optimization
+                            </button>
+                        </div>
+                    </div>
+                   
+                    <div class="overflow-x-auto">
+                        <table id="calibrationTable" class="w-full min-w-max text-sm text-left editable-table">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                <tr>
+                                    <th class="py-2 px-3">T (Expire)</th>
+                                    <th class="py-2 px-3">Tenor</th>
+                                    <th class="py-2 px-3">Strike (%)</th>
+                                    <th class="py-2 px-3">Black Vol (%)</th>
+                                    <th class="py-2 px-3">ZCB (P(0,T))</th>
+                                    <th class="py-2 px-3">ZCB (P(0,s))</th>
+                                    <th class="py-2 px-3">Fwd Rate (%)</th>
+                                    <th class="py-2 px-3">Black Price (%)</th>
+                                    <th class="py-2 px-3">HW Price (%)</th>
+                                    <th class="py-2 px-3">Cost</th>
+                                    <th class="py-2 px-3 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="calibrationTableBody">
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">3.34</td><td contenteditable="true" class="py-2 px-3">32.1</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">2</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">3.40</td><td contenteditable="true" class="py-2 px-3">31.56</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">3</td><td contenteditable="true" class="py-2 px-3">1_</td><td contenteditable="true" class="py-2 px-3">3.56</td><td contenteditable="true" class="py-2 px-3">29.79</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">4G</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">3.73</td><td contenteditable="true" class="py-2 px-3">27.98</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">5</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">3.91</td><td contenteditable="true" class="py-2 px-3">26.23</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">6</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">4.04</td><td contenteditable="true" class="py-2 px-3">24.98</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                                <tr class="border-b"><td contenteditable="true" class="py-2 px-3">7</td><td contenteditable="true" class="py-2 px-3">1</td><td contenteditable="true" class="py-2 px-3">4.16</td><td contenteditable="true" class="py-2 px-3">23.92</td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 calc-cell"></td><td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button id="addCapletRowBtn" class="mt-3 w-full bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-300">
+                        + Add Caplet Row
+                    </button>
+                </div>
             </div>
-             <div class="result-item">
-                <span>隱含選擇權價值 (Embedded Option Value):</span>
-                <strong id="optionValue"></strong>
+ 
+            <!-- ============================================= -->
+            <!-- Tree Tab -->
+            <!-- ============================================= -->
+            <div id="treeTab" class="tab-content-item hidden p-4">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-2xl font-semibold text-gray-800">Interest Rate Trinomial Tree</h2>
+                    <p class="text-sm text-gray-500">The tree is calibrated based on the Discount Curve + Z-Spread.</p>
+                    <div id="tree-info">Tree will be displayed here after calculation.</div>
+                   
+                    <!-- MODIFIED: New Tree Display Controls (Checkboxes) -->
+                    <div class="flex flex-wrap gap-x-6 gap-y-2 p-1 rounded-lg mb-4" id="tree-display-controls">
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" class="tree-display-cb" data-tree-toggle="vanilla" checked>
+                            <span class="text-sm">Vanilla Price</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" class="tree-display-cb" data-tree-toggle="callable" checked>
+                            <span class="text-sm">Callable Price</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" class="tree-display-cb" data-tree-toggle="option" checked>
+                            <span class="text-sm">Option Value</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" class="tree-display-cb" data-tree-toggle="rate" checked>
+                            <span class="text-sm">Short Rate</span>
+                        </label>
+                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" class="tree-display-cb" data-tree-toggle="probs" checked>
+                            <span class="text-sm">Probabilities</span>
+                        </label>
+                    </div>
+                    <!-- End New Tree Display Controls -->
+ 
+                    <div id="tree-container-wrapper">
+                        <div id="tree-container"></div>
+                    </div>
+                </div>
             </div>
-            <div class="result-item">
-                <span>模型隱含殖利率 (Model-Implied Yield, %):</span>
-                <strong id="impliedYield"></strong>
+ 
+            <!-- ============================================= -->
+            <!-- SOP Tab -->
+            <!-- ============================================= -->
+            <div id="sopTab" class="tab-content-item hidden p-4">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">Standard Operating Procedure (SOP)</h2>
+                        <div class="flex space-x-1">
+                            <button id="sop-en-btn" class="sop-lang-btn sub-tab-button active px-3 py-1 text-sm">EN</button>
+                            <button id="sop-ch-btn" class="sop-lang-btn sub-tab-button px-3 py-1 text-sm">CH</button>
+                        </div>
+                    </div>
+ 
+                    <!-- English SOP Content -->
+                    <div id="sop-en" class="sop-content">
+                        <h3>1. Define Bond Parameters (Pricing Tab)</h3>
+                        <ol>
+                            <li>Go to the "Pricing" tab and select the "Bond" sub-tab.</li>
+                            <li>Enter the bond's basic information: Principal, Coupon Rate (%), Maturity (Years), and Coupon Frequency.</li>
+                        </ol>
+ 
+                        <h3>2. Define Call Schedule (Pricing Tab)</h3>
+                        <ol>
+                            <li>Select the "Call Schedule" sub-tab.</li>
+                            <li>Enter the call schedule in text format (e.g., "NC1Yx1Y") in the "Call Schedule (Text)" field.</li>
+                            <li>The "Call Structure (Years)" field will auto-populate. You can also enter this manually.</li>
+                            <li>Enter the "Call Price(s)". If you enter a single value, it will be used for all call dates.</li>
+                            <li><strong>For a Vanilla Bond:</strong> Clear the "Call Schedule (Text)" and "Call Price(s)" fields.</li>
+                        </ol>
+ 
+                        <h3>3. Input Market Data (Pricing Tab)</h3>
+                        <ol>
+                            <li>Go to the "Discount Curve" panel on the right.</li>
+                            <li>Input the terms (Years) and zero-coupon rates (%) for the risk-free curve. This curve is used for discounting and tree calibration.</li>
+                            <li>(Optional) Input a Z-Spread in bps. This spread will be added to the entire curve to calculate the "Model Price".</li>
+                            <li>Press "Confirm" after making changes to the curve table.</li>
+                            <li>Go to the "Bond" sub-tab and enter the actual "Market Price" of the bond.</li>
+                        </ol>
+ 
+                        <h3>4. Set HW Model Parameters (Calibration Tab)</h3>
+                        <ol>
+                            <li>Go to the "Calibration" tab.</li>
+                            <li>Set the "Mean Reversion (a)", "Volatility (σ)", and "Time Steps (per year)". These parameters are used globally for pricing.</li>
+                            <li>(Optional) Use the "Caplet Market Data" table to find optimal parameters. Input market data (Expire, Tenor, Strike, Black Vol).</li>
+                            <li>(Optional) Press "Run Optimization". The model will search for the optimal 'a' and 'σ' that best fit this market data. The parameters in the fields above will be updated.</li>
+                        </ol>
+ 
+                        <h3>5. Price the Bond & Analyze (Pricing Tab)</h3>
+                        <ol>
+                            <li>Go back to the "Pricing" tab's "Bond" sub-tab.</li>
+                            <li>The model automatically calculates:
+                                <ul>
+                                    <li><strong>Model Price:</strong> Based on the Z-Spread (OAS=0).</li>
+                                    <li><strong>OAS:</strong> The spread required to match the "Market Price" (using a base tree with Z-Spread=0 for solving).</li>
+                                </ul>
+                            </li>
+                        </ol>
+ 
+                        <h3>6. Review Results</h3>
+                        <ol>
+                            <li>Check the "Result" sub-tab to see the price breakdown (Vanilla, Option, Callable) based on the <strong>Model Price</strong>, along with the Effective Duration and the calculated <strong>OAS</strong>.</li>
+                            <li>Go to the "Tree" tab to visualize the interest rate tree, which is calibrated using the <strong>Z-Spread</strong>.</li>
+                        </ol>
+                    </div>
+ 
+                    <!-- Chinese SOP Content -->
+                    <div id="sop-ch" class="sop-content hidden">
+                        <h3>1. 定義債券參數 (Pricing Tab)</h3>
+                        <ol>
+                            <li>前往 "Pricing" 標籤頁，選擇 "Bond" 子分頁。</li>
+                            <li>輸入債券的基本資訊：Principal (本金), Coupon Rate (%, 票面利率), Maturity (Years, 到期年限), 和 Coupon Frequency (付息頻V)。</li>
+                        </ol>
+ 
+                        <h3>2. 定義贖回條款 (Pricing Tab)</h3>
+                        <ol>
+                            <li>選擇 "Call Schedule" 子分頁。</li>
+                            <li>在 "Call Schedule (Text)" 欄位中輸入文本格式的贖回結構（例如 "NC1Yx1Y"）。</li>
+                            <li>"Call Structure (Years)" 欄位將會自動填入。您也可以手動輸入。</li>
+                            <li>輸入 "Call Price(s)" (贖回價格)。如果只輸入一個值，它將應用於所有贖回日期。</li>
+                            <li><strong>若為一般債券 (Vanilla Bond):</strong> 請清空 "Call Schedule (Text)" 和 "Call Price(s)" 欄位。</li>
+                        </ol>
+ 
+                        <h3>3. 輸入市場數據 (Pricing Tab)</h3>
+                        <ol>
+                            <li>在右側的 "Discount Curve" (折現曲線) 面板中。</li>
+                            <li>輸入無風險利率曲線的期間 (Years) 和零息利率 (Rate %)。此曲線將用於折現和校準利率樹。</li>
+                            <li>(可選) 輸入 Z-Spread (bps)。此利差將被加到整個曲線上用來計算「模型價格 (Model Price)」。</li>
+                            <li>修改曲線表格後請按下 "Confirm" (確認)。</li>
+                            <li>回到 "Bond" 子分頁，輸入債券的實際「市場價格 (Market Price)」。</li>
+                        </ol>
+ 
+                        <h3>4. 設定HW模型參數 (Calibration Tab)</h3>
+                        <ol>
+                            <li>前往 "Calibration" 標籤頁。</li>
+                            <li>設定 "Mean Reversion (a)", "Volatility (σ)" 和 "Time Steps (per year)"。這些參數將共用於所有定價計算。</li>
+                            <li>(可選) 使用 "Caplet Market Data" 表格來輔助尋找最佳參數。輸入市場數據 (Expire, Tenor, Strike, Black Vol)。</li>
+                            <li>(可選) 按下 "Run Optimization" (執行優化)。模型將搜索最適合此市場數據的 'a' 和 'σ'，並自動更新上方的參數欄位。</li>
+                        </ol>
+ 
+                        <h3>5. 債券定價與分析 (Pricing Tab)</h3>
+                        <ol>
+                            <li>回到 "Pricing" 標籤頁的 "Bond" 子分頁。</li>
+                            <li>模型會自動計算：
+                                <ul>
+                                    <li><strong>Model Price (模型價格):</strong> 基於 Z-Spread (OAS=0) 計算。</li>
+                                    <li><strong>OAS (選擇權調整利差):</strong> 根據 "Market Price" 反算出的利差 (反解時使用 Z-Spread=0 的基礎樹)。</li>
+                                </ul>
+                            </li>
+                        </ol>
+ 
+                        <h3>6. 檢視結果</h3>
+                        <ol>
+                            <li>查看 "Result" 子分頁，可看到基於 <strong>Model Price</strong> 的價格分解 (Vanilla, Option, Callable)，以及有效存續期間 (Effective Duration) 和反算出的 <strong>OAS</strong>。</li>
+                            <li>前往 "Tree" 標籤頁，可視化利率樹。此利率樹是使用 <strong>Z-Spread</strong> 校準的。</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
-            <div class="result-item">
-                <span>選擇權調整利差 (OAS, bps):</span>
-                <strong id="oas"></strong>
-            </div>
-        </div>
+           
+        </main>
     </div>
+   
+    <!-- ============================================= -->
+    <!-- SCRIPT block -->
+    <!-- ============================================= -->
+    <script type="module">
+        // A small tolerance for floating point comparisons
+        const EPSILON = 1e-9;
  
-    <!-- Modal for Tree Display -->
-    <div id="treeModal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h2>利率三元樹詳細結果</h2>
-            <div id="tree-info"></div>
-            <div id="tree-container-wrapper">
-                <div id="tree-container"></div>
-            </div>
-        </div>
-    </div>
+        // Global state variables
+        let calculationResult = null;
+        let globalCurveData = []; // Stores [{time, rate}, ...]
+        let isCalculating = false;
+        let isUpdatingInputs = false; // Flag to prevent re-entry from input listeners
  
-    <script src="script.js"></script>
+        // --- DOM Element References ---
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content-item');
+        const subTabButtons = document.querySelectorAll('.sub-tab-button');
+        const subTabContents = document.querySelectorAll('.sub-tab-content-item');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingMessage = document.getElementById('loading-message');
+       
+        // --- Pricing Tab Elements ---
+        const principalInput = document.getElementById('principal');
+        const couponRateInput = document.getElementById('couponRate');
+        const maturityInput = document.getElementById('maturity');
+        const frequencySelect = document.getElementById('frequency');
+       
+        const marketPriceInput = document.getElementById('marketPrice');
+        const modelPriceInput = document.getElementById('modelPrice');
+        const modelYieldInput = document.getElementById('modelYield');
+        const spreadInput = document.getElementById('spread'); // This is OAS
+       
+        const callScheduleTextInput = document.getElementById('callScheduleText');
+        const callPriceInput = document.getElementById('callPrice');
+        const callStructureInput = document.getElementById('callStructure');
+       
+        const zSpreadInput = document.getElementById('zSpread');
+        const curveTableBody = document.getElementById('curveTableBody');
+        const addCurveRowBtn = document.getElementById('addCurveRowBtn');
+        const confirmCurveBtn = document.getElementById('confirmCurveBtn');
+        const curveStatus = document.getElementById('curveStatus');
+ 
+        const allModelInputs = document.querySelectorAll('.model-input');
+ 
+        // --- Calibration Tab Elements ---
+        const calA_Input = document.getElementById('cal_a');
+        const calSigma_Input = document.getElementById('cal_sigma');
+        const timestepsInput = document.getElementById('timesteps');
+        const runCalibrationBtn = document.getElementById('runCalibrationBtn');
+        const calibrationTableBody = document.getElementById('calibrationTableBody');
+        const addCapletRowBtn = document.getElementById('addCapletRowBtn');
+        const calTotalCost = document.getElementById('cal_total_cost');
+ 
+        // --- Tree Tab Elements ---
+        const treeContainer = document.getElementById('tree-container');
+        const treeInfo = document.getElementById('tree-info');
+        const treeDisplayControls = document.getElementById('tree-display-controls');
+ 
+        // --- SOP Tab Elements ---
+        const sopEnBtn = document.getElementById('sop-en-btn');
+        const sopChBtn = document.getElementById('sop-ch-btn');
+        const sopEn = document.getElementById('sop-en');
+        const sopCh = document.getElementById('sop-ch');
+ 
+        // --- On Document Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+           
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.getAttribute('data-tab');
+                    switchTab(tabId, tabButtons, tabContents, 'active');
+                });
+            });
+ 
+            subTabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.getAttribute('data-subtab');
+                    switchTab(tabId, subTabButtons, subTabContents, 'active');
+                });
+            });
+ 
+            // All model inputs now trigger a full calculation
+            allModelInputs.forEach(input => {
+                input.addEventListener('change', triggerFullCalculation);
+            });
+           
+            callScheduleTextInput.addEventListener('blur', parseCallScheduleText);
+ 
+            addCurveRowBtn.addEventListener('click', addCurveRow);
+            confirmCurveBtn.addEventListener('click', () => {
+                parseDiscountCurve();
+                triggerFullCalculation(); // Trigger calculation after curve is confirmed
+            });
+            curveTableBody.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-row-btn')) {
+                    e.target.closest('tr').remove();
+                    curveStatus.textContent = "Curve modified. Press 'Confirm' to apply.";
+                    curveStatus.classList.remove('text-green-600');
+                    curveStatus.classList.add('text-yellow-600');
+                }
+            });
+ 
+            runCalibrationBtn.addEventListener('click', runOptimization);
+            calA_Input.addEventListener('input', () => calculateAndDisplayCalibration());
+            calSigma_Input.addEventListener('input', () => calculateAndDisplayCalibration());
+           
+            addCapletRowBtn.addEventListener('click', addCapletRow);
+            calibrationTableBody.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-row-btn')) {
+                    e.target.closest('tr').remove();
+                }
+            });
+ 
+            sopEnBtn.addEventListener('click', () => {
+                sopEn.classList.remove('hidden');
+                sopCh.classList.add('hidden');
+                sopEnBtn.classList.add('active');
+                sopChBtn.classList.remove('active');
+            });
+            sopChBtn.addEventListener('click', () => {
+                sopEn.classList.add('hidden');
+                sopCh.classList.remove('hidden');
+                sopEnBtn.classList.remove('active');
+                sopChBtn.classList.add('active');
+            });
+           
+            treeDisplayControls.addEventListener('change', (e) => {
+                if (e.target.classList.contains('tree-display-cb')) {
+                    updateTreeView();
+                }
+            });
+           
+            // --- Initial setup ---
+            parseDiscountCurve();
+            parseCallScheduleText();
+            updateTreeView(); // Set initial tree display
+            if (globalCurveData.length > 0) {
+                calculateAndDisplayCalibration();
+            }
+            triggerFullCalculation(); // Initial calculation on page load
+        });
+ 
+        function switchTab(tabId, buttons, contents, activeClass) {
+            contents.forEach(content => {
+                content.id === tabId ? content.classList.remove('hidden') : content.classList.add('hidden');
+            });
+            buttons.forEach(button => {
+                const buttonTabId = button.getAttribute('data-tab') || button.getAttribute('data-subtab');
+                buttonTabId === tabId ? button.classList.add(activeClass) : button.classList.remove(activeClass);
+            });
+        }
+       
+        function addCurveRow() {
+            const newRow = document.createElement('tr');
+            newRow.className = 'border-b';
+            newRow.innerHTML = `
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td>
+            `;
+            curveTableBody.appendChild(newRow);
+        }
+ 
+        function parseDiscountCurve() {
+            const rows = curveTableBody.querySelectorAll('tr');
+            const curve = [];
+            let hasError = false;
+            try {
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length < 2) return;
+                    const termStr = cells[0].textContent.trim();
+                    const rateStr = cells[1].textContent.trim();
+                    if (termStr === '' && rateStr === '') return;
+                    const term = parseFloat(termStr);
+                    const rate = parseFloat(rateStr);
+                    if (!isNaN(term) && !isNaN(rate) && term >= 0) {
+                        curve.push({ time: term, rate: rate / 100.0 });
+                    } else {
+                        hasError = true;
+                    }
+                });
+ 
+                if (hasError) showCustomAlert("Some lines in the discount curve were formatted incorrectly and were skipped.");
+                if (curve.length === 0) {
+                     globalCurveData = [];
+                     curveStatus.textContent = "Error parsing curve.";
+                     curveStatus.classList.remove('text-green-600');
+                     curveStatus.classList.add('text-red-600');
+                     return false;
+                }
+               
+                curve.sort((a, b) => a.time - b.time);
+               
+                globalCurveData = curve;
+                curveStatus.textContent = `Curve parsed successfully (${globalCurveData.length} points).`;
+                curveStatus.classList.remove('text-red-600');
+                curveStatus.classList.add('text-green-600');
+                return true;
+            } catch (error) {
+                showCustomAlert(`Error parsing discount curve: ${error.message}`);
+                globalCurveData = [];
+                curveStatus.textContent = "Error parsing curve.";
+                curveStatus.classList.remove('text-green-600');
+                curveStatus.classList.add('text-red-600');
+                return false;
+            }
+        }
+       
+        function showLoading(message = "Calculating...") {
+            loadingMessage.textContent = message;
+            loadingOverlay.style.display = 'flex';
+        }
+ 
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+ 
+        function triggerFullCalculation() {
+            if (isCalculating || isUpdatingInputs) return;
+            
+            isCalculating = true;
+            showLoading("Calculating...");
+ 
+            setTimeout(() => {
+                try {
+                    runFullCalculationAndSolve();
+                } catch (error) {
+                    console.error("Calculation Error:", error);
+                    showCustomAlert(`Error during calculation: ${error.message}`);
+                    calculationResult = null;
+                    displayTree(null);
+                    clearAnalysisResults();
+                } finally {
+                    isCalculating = false;
+                    hideLoading();
+                }
+            }, 0);
+        }
+ 
+        function getStableInputs() {
+            const principal = parseFloat(principalInput.value);
+            const couponRate = parseFloat(couponRateInput.value) / 100;
+            const maturity = parseFloat(maturityInput.value);
+            const couponFreq = parseInt(frequencySelect.value);
+           
+            const marketPrice = parseFloat(marketPriceInput.value);
+           
+            const callPriceStr = callPriceInput.value.split(',')[0].trim();
+            const strikePrice = parseFloat(callPriceStr);
+            
+            // Read from Calibration tab inputs
+            const meanReversion = parseFloat(calA_Input.value) / 100;
+            const volatility = parseFloat(calSigma_Input.value) / 100;
+            const stepsPerYear = parseInt(timestepsInput.value);
+           
+            const zSpreadVal = parseFloat(zSpreadInput.value);
+            const zSpreadBps = isNaN(zSpreadVal) ? 0 : zSpreadVal;
+ 
+            if (globalCurveData.length === 0) {
+                 if (!parseDiscountCurve()) {
+                    throw new Error("Please fix errors in the Discount Curve table before calculating.");
+                 }
+            }
+            const yieldCurve = globalCurveData;
+ 
+            const callTimeStr = callStructureInput.value;
+            const callTimes = callTimeStr.split(',').map(t => parseFloat(t.trim())).filter(t => !isNaN(t));
+           
+            let noCallPeriod = 0;
+            let callFrequency = 0;
+ 
+            if (callTimes.length > 0) {
+                noCallPeriod = callTimes[0];
+                if (callTimes.length > 1) {
+                    callFrequency = callTimes[1] - callTimes[0];
+                } else {
+                    callFrequency = maturity;
+                }
+            } else {
+                noCallPeriod = maturity + 1; // Effectively not callable
+                callFrequency = 1;
+            }
+ 
+            return {
+                principal, couponRate, maturity, couponFreq, strikePrice,
+                marketPrice,
+                callInfo: { noCallPeriod, callFrequency, callTimes: callTimes },
+                model: { meanReversion, volatility, stepsPerYear },
+                yieldCurve,
+                zSpreadBps,
+                spreadBps: null // OAS is solved for, not an input here
+            };
+        }
+       
+        function runFullCalculationAndSolve() {
+            let inputs = getStableInputs();
+            
+            // Step 1: Calculate "Model Price" (based on Z-Spread, no OAS)
+            const modelPriceResult = priceCallableBondHW({ ...inputs, spreadBps: 0 });
+            const modelPrice = modelPriceResult.price;
+            const treeForDisplay = modelPriceResult.tree;
+            const modelYield = calculateImpliedYield(modelPrice, inputs);
+
+            // Step 2: Calculate OAS based on user's Market Price
+            const finalOAS = calculateOAS({
+                ...inputs,
+                zSpreadBps: 0, // Use base tree (no Z-Spread) for OAS calculation
+                marketPrice: inputs.marketPrice
+            });
+            const finalOAS_val = isNaN(inputs.marketPrice) ? NaN : finalOAS;
+
+            // Step 3: Calculate auxiliary results for display
+            const finalOptionFreePrice = calculateOptionFreePrice(inputs);
+            const finalOptionValue = finalOptionFreePrice - modelPrice;
+            const inputsForDuration = { ...inputs, spreadBps: finalOAS_val, zSpreadBps: 0 }; 
+            const finalEffDuration = calculateEffectiveDuration(inputsForDuration, inputs.marketPrice);
+            const callProbabilities = calculateCallProbabilities(treeForDisplay, inputs.callInfo.callTimes);
+    
+            // Step 4: Store and display all results
+            calculationResult = {
+                price: modelPrice,
+                tree: treeForDisplay,
+                optionFreePrice: finalOptionFreePrice,
+                optionValue: finalOptionValue,
+                impliedYield: modelYield,
+                oas: finalOAS_val,
+                effDuration: finalEffDuration,
+                callProbabilities: callProbabilities,
+                zSpreadBps: inputs.zSpreadBps,
+                userMarketPrice: inputs.marketPrice
+            };
+            
+            displayAnalysisOnPricingTab(calculationResult);
+            displayTree(calculationResult);
+        }
+ 
+        function secantSolver(func, x0, x1, tolerance = 1e-7, maxIter = 100) {
+            let f0 = func(x0);
+            let f1 = func(x1);
+ 
+            if (Math.abs(f0) < tolerance) return x0;
+            if (Math.abs(f1) < tolerance) return x1;
+ 
+            for (let i = 0; i < maxIter; i++) {
+                if (Math.abs(f1 - f0) < EPSILON) {
+                    if (Math.abs(f1) > tolerance) {
+                        x1 = x1 + (x1 === 0 ? 1e-5 : x1 * 1e-5);
+                        f1 = func(x1);
+                        if (Math.abs(f1 - f0) < EPSILON) return x1;
+                    } else {
+                         return x1;
+                    }
+                }
+    
+                const x2 = x1 - f1 * (x1 - x0) / (f1 - f0);
+                x0 = x1;
+                f0 = f1;
+                x1 = x2;
+                f1 = func(x1);
+ 
+                if (Math.abs(f1) < tolerance) return x1;
+            }
+            return x1;
+        }
+
+        function calculateOAS(inputs) {
+            const { marketPrice } = inputs;
+            if (isNaN(marketPrice)) return NaN;
+ 
+            const errorFunc = (oasInBps) => {
+                const pricingInputs = { ...inputs, spreadBps: oasInBps, zSpreadBps: 0 };
+                const modelPrice = priceCallableBondHW(pricingInputs).price;
+                return modelPrice - marketPrice;
+            };
+    
+            const oas = secantSolver(errorFunc, -200, 200, 1e-4, 100);
+            return oas !== null ? oas : NaN;
+        }
+
+        function priceWithFlatYield(yieldRate, inputs) {
+            let price = 0;
+            const { principal, couponRate, maturity, couponFreq } = inputs;
+            const couponPayment = principal * couponRate / couponFreq;
+            const numCoupons = maturity * couponFreq;
+    
+            for (let i = 1; i <= numCoupons; i++) {
+                price += couponPayment / Math.pow(1 + yieldRate / couponFreq, i);
+            }
+            price += principal / Math.pow(1 + yieldRate / couponFreq, numCoupons);
+            return price;
+        }
+
+        function calculateImpliedYield(fairValue, inputs) {
+             const errorFunc = (yieldRate) => {
+                return priceWithFlatYield(yieldRate, inputs) - fairValue;
+            };
+    
+            const yieldResult = secantSolver(errorFunc, 0.0001, 0.20);
+            return yieldResult !== null ? yieldResult * 100 : NaN;
+        }
+
+        function calculateOptionFreePrice(inputs) {
+            let price = 0;
+            const { principal, couponRate, maturity, couponFreq, yieldCurve, zSpreadBps } = inputs;
+            const couponPayment = principal * couponRate / couponFreq;
+            const numCoupons = maturity * couponFreq;
+           
+            const totalSpread = (zSpreadBps || 0) / 10000;
+     
+            for (let i = 1; i <= numCoupons; i++) {
+                const timeToCoupon = i / couponFreq;
+                const rate = interpolateYield(timeToCoupon, yieldCurve) + totalSpread;
+                price += couponPayment * Math.exp(-rate * timeToCoupon);
+            }
+    
+            const timeToMaturity = maturity;
+            const finalRate = interpolateYield(timeToMaturity, yieldCurve) + totalSpread;
+            price += principal * Math.exp(-finalRate * timeToMaturity);
+    
+            return price;
+        }
+
+        function interpolateYield(time, yieldCurve) {
+            if (yieldCurve.length === 0) return 0.05;
+            if (time <= yieldCurve[0].time) return yieldCurve[0].rate;
+            if (time >= yieldCurve[yieldCurve.length - 1].time) return yieldCurve[yieldCurve.length - 1].rate;
+    
+            let p1 = yieldCurve[0], p2 = yieldCurve[yieldCurve.length - 1];
+            for (let i = 0; i < yieldCurve.length - 1; i++) {
+                if (yieldCurve[i].time <= time && yieldCurve[i+1].time >= time) {
+                    p1 = yieldCurve[i];
+                    p2 = yieldCurve[i+1];
+                    break;
+                }
+            }
+            if (p1.time === p2.time) return p1.rate;
+    
+            return p1.rate + (p2.rate - p1.rate) * (time - p1.time) / (p2.time - p1.time);
+        }
+
+        function calculateAccruedInterest(timeCurrent, couponRate, principal, couponFreq, maturity) {
+            const periodLength = 1 / couponFreq;
+            const numPeriods = maturity * couponFreq;
+    
+            let lastCouponTime = 0;
+            let nextCouponTime = 0;
+    
+            for (let i = 1; i <= numPeriods; i++) {
+                const currentCouponTime = i * periodLength;
+                if (timeCurrent < currentCouponTime - EPSILON) {
+                    nextCouponTime = currentCouponTime;
+                    lastCouponTime = (i - 1) * periodLength;
+                    break;
+                } else if (Math.abs(timeCurrent - currentCouponTime) < EPSILON) {
+                    return 0;
+                }
+            }
+           
+            if (timeCurrent < EPSILON) {
+                lastCouponTime = 0;
+                nextCouponTime = periodLength;
+            } else if (nextCouponTime === 0 && timeCurrent <= maturity + EPSILON) {
+                nextCouponTime = maturity;
+                lastCouponTime = (numPeriods - 1) * periodLength;
+                if (lastCouponTime < 0) lastCouponTime = 0;
+            } else if (nextCouponTime === 0) {
+                return 0;
+            }
+    
+            const daysInPeriod = periodLength * 365;
+            const daysSinceLastCoupon = (timeCurrent - lastCouponTime) * 365;
+     
+            if (daysInPeriod < EPSILON) return 0;
+    
+            const accruedFraction = daysSinceLastCoupon / daysInPeriod;
+            return accruedFraction * (principal * couponRate / couponFreq);
+        }
+
+        function priceCallableBondHW(inputs) {
+            const { maturity, model, yieldCurve, spreadBps, zSpreadBps, couponRate, principal, couponFreq, callInfo, strikePrice } = inputs;
+            const { meanReversion: a, volatility: sigma, stepsPerYear } = model;
+           
+            if (isNaN(a) || isNaN(sigma)) {
+                throw new Error("Invalid HW model parameters (a or sigma).");
+            }
+            if (callInfo.noCallPeriod <= maturity && isNaN(strikePrice)) {
+                throw new Error("Invalid Call Price. Bond is callable but price is not a number.");
+            }
+           
+            const calibrationSpread = (zSpreadBps || 0) / 10000;
+            const adjustedYieldCurve = yieldCurve.map(p => ({ time: p.time, rate: p.rate + calibrationSpread }));
+
+    		const discountingSpread = (spreadBps || 0) / 10000;
+    		
+            const dt = 1 / stepsPerYear;
+            const totalSteps = Math.round(maturity * stepsPerYear);
+            const timeSteps = Array.from({ length: totalSteps + 1 }, (_, i) => i * dt);
+    
+            const tree = timeSteps.map(t => ({ t, dt, nodes: [] }));
+            const dx = sigma * Math.sqrt(3 * dt);
+    
+            tree[0].nodes.push({ j: 0, Q: 1, k: 0, pu: 0, pm: 0, pd: 0, alpha: 0, rate: 0 });
+    
+            for (let i = 0; i < totalSteps; i++) {
+                const dt_current = tree[i].dt;
+                const dx_for_current_step = dx;
+                const dx_for_next_step = dx;
+    
+                let min_k_for_next_step = Infinity;
+                let max_k_for_next_step = -Infinity;
+    
+                tree[i].nodes.forEach(node => {
+                    if (node.Q === undefined || node.Q === null) {
+                        node.Q = 0;
+                    }
+    
+                    const x_current = node.j * dx_for_current_step;
+                    const xx_expected_next_x = x_current * (1 - a * dt_current);
+    
+                    let k_float = xx_expected_next_x / dx_for_next_step;
+                    let k = Math.round(k_float);
+    
+                    let rmuast = xx_expected_next_x - k * dx_for_next_step;
+                    const variance = sigma * sigma * dt_current;
+    
+                    let pu_raw = (variance + rmuast * rmuast + rmuast * dx_for_next_step) / (2 * dx_for_next_step * dx_for_next_step);
+                    let pd_raw = (variance + rmuast * rmuast - rmuast * dx_for_next_step) / (2 * dx_for_next_step * dx_for_next_step);
+                    let pm_raw = 1 - pu_raw - pd_raw;
+    
+                    let attempts = 0;
+                    const maxAttempts = 5;
+    
+                    while ( (pu_raw < -EPSILON || pd_raw < -EPSILON || pm_raw < -EPSILON || Math.abs(pu_raw + pm_raw + pd_raw - 1) > EPSILON) && attempts < maxAttempts) {
+                        if (pu_raw < -EPSILON) { k++; }
+                        else if (pd_raw < -EPSILON) { k--; }
+                        else if (pm_raw < -EPSILON) {
+                            if (k_float > k) k++; else k--;
+                        } else {
+                            if (k_float > k) k++; else k--;
+                        }
+    
+                        rmuast = xx_expected_next_x - k * dx_for_next_step;
+    
+                        pu_raw = (variance + rmuast * rmuast + rmuast * dx_for_next_step) / (2 * dx_for_next_step * dx_for_next_step);
+                        pd_raw = (variance + rmuast * rmuast - rmuast * dx_for_next_step) / (2 * dx_for_next_step * dx_for_next_step);
+                        pm_raw = 1 - pu_raw - pd_raw;
+                        attempts++;
+                    }
+    
+                    let pu = Math.max(0, pu_raw);
+                    let pd = Math.max(0, pd_raw);
+                    let pm = Math.max(0, pm_raw);
+    
+                    const sum_probs = pu + pm + pd;
+                    if (Math.abs(sum_probs - 1) > EPSILON && sum_probs > EPSILON) {
+                        pu /= sum_probs;
+                        pm /= sum_probs;
+                        pd /= sum_probs;
+                    }
+    
+                    node.k = k;
+                    node.pu = pu;
+                    node.pm = pm;
+                    node.pd = pd;
+    
+                    min_k_for_next_step = Math.min(min_k_for_next_step, k - 1);
+                    max_k_for_next_step = Math.max(max_k_for_next_step, k + 1);
+                });
+    
+                if (i < totalSteps) {
+                    let minJ_next = min_k_for_next_step;
+                    let maxJ_next = max_k_for_next_step;
+    
+                    if (i === 0) {
+                        minJ_next = -1;
+                        maxJ_next = 1;
+                    }
+    
+                    tree[i+1].nodes = [];
+    
+                    for (let j = minJ_next; j <= maxJ_next; j++) {
+                        tree[i+1].nodes.push({ j: j, Q: 0 });
+                    }
+                }
+    
+                tree[i].nodes.forEach(node => {
+                    const r_at_node = node.j * dx_for_current_step + (node.alpha || 0);
+                    const q_propagate = node.Q * Math.exp(-r_at_node * dt_current);
+    
+                    const {k, pu, pm, pd} = node;
+    
+                    const upNode = tree[i+1].nodes.find(n => n.j === k + 1);
+                    const midNode = tree[i+1].nodes.find(n => n.j === k);
+                    const downNode = tree[i+1].nodes.find(n => n.j === k - 1);
+    
+                    if (upNode) upNode.Q += pu * q_propagate;
+                    if (midNode) midNode.Q += pm * q_propagate;
+                    if (downNode) downNode.Q += pd * q_propagate;
+                });
+            }
+    
+            let lastAlpha = 0;
+            if (totalSteps > 0 && timeSteps[1] !== undefined) {
+                 lastAlpha = interpolateYield(timeSteps[1], adjustedYieldCurve);
+            }
+    
+            for (let i = 0; i < totalSteps; i++) {
+                const targetTime = timeSteps[i+1];
+                const targetRate = interpolateYield(targetTime, adjustedYieldCurve);
+                const targetDiscount = Math.exp(-targetRate * targetTime);
+    
+                let alpha = lastAlpha;
+                let converged = false;
+               
+                for (let iterCount = 0; iterCount < 200; iterCount++) {
+                    let sum_Q_discounted = 0;
+                    let derivative_sum_Q_discounted = 0;
+    
+                    const activeNodes = tree[i].nodes.filter(n => Math.abs(n.Q) > EPSILON);
+    
+                    if (activeNodes.length === 0 && i > 0) {
+                        converged = true;
+                        break;
+                    }
+    
+                    activeNodes.forEach(node => {
+                        const r = node.j * dx + alpha;
+                        const discountedQ = node.Q * Math.exp(-r * dt);
+                        sum_Q_discounted += discountedQ;
+                        derivative_sum_Q_discounted -= dt * discountedQ;
+                    });
+    
+                    const currentAlphaError = sum_Q_discounted - targetDiscount;
+                    if (Math.abs(currentAlphaError) < 1e-10) {
+                        converged = true;
+                        break;
+                    }
+                    if (Math.abs(derivative_sum_Q_discounted) < EPSILON) {
+                        converged = false;
+                        break;
+                    }
+                    alpha -= currentAlphaError / derivative_sum_Q_discounted;
+                }
+    
+                if (!converged) {
+                    console.error(`Calibration FAILED for Step ${i}.`);
+                }
+     
+                tree[i].nodes.forEach(node => node.alpha = alpha);
+                lastAlpha = alpha;
+    
+                if (i < totalSteps) {
+                    tree[i+1].nodes.forEach(node => node.Q = 0);
+    
+                    tree[i].nodes.forEach(node => {
+                        const r_at_node = node.j * dx + node.alpha;
+                        const q_propagate = node.Q * Math.exp(-r_at_node * dt);
+    
+                        const {k, pu, pm, pd} = node;
+    
+                        const upNode = tree[i+1].nodes.find(n => n.j === k + 1);
+                        const midNode = tree[i+1].nodes.find(n => n.j === k);
+                        const downNode = tree[i+1].nodes.find(n => n.j === k - 1);
+    
+                        if (upNode) upNode.Q += pu * q_propagate;
+                        if (midNode) midNode.Q += pm * q_propagate;
+                        if (downNode) downNode.Q += pd * q_propagate;
+                    });
+                }
+            }
+    
+            const couponPayment = principal * couponRate / couponFreq;
+    
+            for (let i = totalSteps; i >= 0; i--) {
+                const time = timeSteps[i];
+                const isCouponDate = (time > EPSILON && Math.abs(time * couponFreq - Math.round(time * couponFreq)) < EPSILON);
+    
+                let isCallable = false;
+                if (i < totalSteps && callInfo.noCallPeriod <= maturity) {
+                    if (time >= callInfo.noCallPeriod - EPSILON) {
+                        if (callInfo.callTimes.some(callTime => Math.abs(time - callTime) < EPSILON)) {
+                            isCallable = true;
+                        }
+                    }
+                }
+    
+                tree[i].nodes.forEach(node => {
+                    let pureBondContinuationValue;
+                    let callableContinuationValue;
+    
+                    if (i === totalSteps) {
+                        pureBondContinuationValue = principal + (isCouponDate ? couponPayment : 0);
+                        callableContinuationValue = principal + (isCouponDate ? couponPayment : 0);
+    
+                    } else {
+                        const upNode = tree[i+1].nodes.find(n => n.j === node.k + 1);
+                        const midNode = tree[i+1].nodes.find(n => n.j === node.k);
+                        const downNode = tree[i+1].nodes.find(n => n.j === node.k - 1);
+    
+                        if (!upNode || !midNode || !downNode) {
+                            pureBondContinuationValue = 0;
+                            callableContinuationValue = 0;
+                        } else {
+                            const r = node.j * dx + node.alpha;
+    						const r_with_oas = r + discountingSpread;
+    						
+                            const expectedPureBondPriceNext = (node.pu * (upNode?.pureBondPrice ?? 0)) +
+                                                              (node.pm * (midNode?.pureBondPrice ?? 0)) +
+                                                              (node.pd * (downNode?.pureBondPrice ?? 0));
+                            pureBondContinuationValue = expectedPureBondPriceNext * Math.exp(-r_with_oas * dt);
+        
+                            const expectedCallablePriceNext = (node.pu * (upNode?.callablePrice ?? 0)) +
+                                                              (node.pm * (midNode?.callablePrice ?? 0)) +
+                                                              (node.pd * (downNode?.callablePrice ?? 0));
+                            callableContinuationValue = expectedCallablePriceNext * Math.exp(-r_with_oas * dt);
+                        }
+ 
+                        if (isCouponDate) {
+                            pureBondContinuationValue += couponPayment;
+                            callableContinuationValue += couponPayment;
+                        }
+                    }
+    
+                    node.pureBondPrice = pureBondContinuationValue;
+    
+                    node.exercised = false;
+                    const accruedInterest = calculateAccruedInterest(time, couponRate, principal, couponFreq, maturity);
+                    const priceForCallDecision = callableContinuationValue - (isCouponDate ? couponPayment : accruedInterest);
+    
+                    if (isCallable && priceForCallDecision > strikePrice) {
+                        node.callablePrice = strikePrice + (isCouponDate ? couponPayment : accruedInterest);
+                        node.exercised = true;
+                    } else {
+                        node.callablePrice = callableContinuationValue;
+                    }
+    
+                    node.rate = node.j * dx + node.alpha;
+                    node.optionValue = node.pureBondPrice - node.callablePrice;
+                });
+            }
+    
+            const rootNode = tree[0].nodes[0];
+            return { price: rootNode.callablePrice, tree };
+        }
+ 
+        function calculateEffectiveDuration(inputs, basePrice) {
+            try {
+                if (isNaN(basePrice) || basePrice === 0) return NaN;
+
+                const shift = 0.0001;
+                const currentOAS = inputs.spreadBps;
+ 
+                const curve_down = globalCurveData.map(p => ({ time: p.time, rate: p.rate - shift }));
+                const inputs_down = {
+                    ...inputs,
+                    yieldCurve: curve_down,
+                    zSpreadBps: 0,
+                    spreadBps: currentOAS
+                };
+                const price_down = priceCallableBondHW(inputs_down).price;
+ 
+                const curve_up = globalCurveData.map(p => ({ time: p.time, rate: p.rate + shift }));
+                const inputs_up = {
+                    ...inputs,
+                    yieldCurve: curve_up,
+                    zSpreadBps: 0,
+                    spreadBps: currentOAS
+                };
+                const price_up = priceCallableBondHW(inputs_up).price;
+               
+                if (isNaN(price_down) || isNaN(price_up)) {
+                    throw new Error("Invalid prices for duration calculation.");
+                }
+ 
+                return (price_down - price_up) / (2 * basePrice * shift);
+            } catch (error) {
+                console.error("Error in calculateEffectiveDuration:", error);
+                return NaN;
+            }
+        }
+       
+        function parseCallScheduleText() {
+            const text = callScheduleTextInput.value.trim().toUpperCase();
+            if (text === '' || text === 'NONE') {
+                callStructureInput.value = '';
+                callPriceInput.value = ''; // Clear call price for vanilla bonds
+                triggerFullCalculation();
+                return;
+            }
+ 
+            const regex = /NC([\d.]+)(Y|M)X([\d.]+)(Y|M)/;
+            const match = text.match(regex);
+           
+            if (!match) {
+                const regexNcOnly = /NC([\d.]+)(Y|M)/;
+                const matchNcOnly = text.match(regexNcOnly);
+               
+                if (matchNcOnly) {
+                    let ncPeriod = parseFloat(matchNcOnly[1]);
+                    let ncUnit = matchNcOnly[2];
+                    if (ncUnit === 'M') ncPeriod /= 12.0;
+                    
+                    const callTimes = [ncPeriod];
+                    callStructureInput.value = callTimes.join(', ');
+                    
+                    // Default and expand call price if needed
+                    updateCallPriceForSchedule(callTimes);
+                    triggerFullCalculation();
+                    return;
+                }
+                return;
+            }
+ 
+            try {
+                let ncPeriod = parseFloat(match[1]);
+                let ncUnit = match[2];
+                let callPeriod = parseFloat(match[3]);
+                let callUnit = match[4];
+               
+                if (ncUnit === 'M') ncPeriod /= 12.0;
+                if (callUnit === 'M') callPeriod /= 12.0;
+               
+                const maturity = parseFloat(maturityInput.value);
+                if (isNaN(maturity)) {
+                    showCustomAlert("Please set bond maturity first.");
+                    return;
+                }
+ 
+                const callTimes = [];
+                let currentTime = ncPeriod;
+               
+                while (currentTime < maturity - EPSILON) {
+                    callTimes.push(Math.round(currentTime * 10000) / 10000);
+                    currentTime += callPeriod;
+                }
+               
+                callStructureInput.value = callTimes.join(', ');
+                
+                // Default and expand call price if needed
+                updateCallPriceForSchedule(callTimes);
+                triggerFullCalculation();
+
+            } catch (e) {
+                showCustomAlert("Error parsing call schedule text: " + e.message);
+            }
+        }
+
+        function updateCallPriceForSchedule(callTimes) {
+            let callPriceStr = callPriceInput.value.trim();
+            
+            // If the call price is empty, default it to '100'.
+            if (callPriceStr === '') {
+                callPriceInput.value = '100';
+                callPriceStr = '100'; // Update our local variable as well
+            }
+
+            const prices = callPriceStr.split(',').map(p => p.trim());
+
+            // If there's only one price entered but multiple call dates, expand it.
+            if (prices.length === 1 && callTimes.length > 1) {
+                const singlePrice = prices[0];
+                callPriceInput.value = callTimes.map(() => singlePrice).join(', ');
+            }
+        }
+ 
+        function erf(x) {
+            const a1 =  0.254829592; const a2 = -0.284496736;
+            const a3 =  1.421413741; const a4 = -1.453152027;
+            const a5 =  1.061405429; const p  =  0.3275911;
+            const sign = (x >= 0) ? 1 : -1;
+            x = Math.abs(x);
+            const t = 1.0 / (1.0 + p * x);
+            const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+            return sign * y;
+        }
+ 
+        function NCD(x) {
+            return 0.5 * (1.0 + erf(x / Math.sqrt(2.0)));
+        }
+ 
+        function getP(t) {
+            const discrete_rate = interpolateYield(t, globalCurveData);
+            return Math.exp(-discrete_rate * t);
+        }
+       
+        function addCapletRow() {
+            const newRow = document.createElement('tr');
+            newRow.className = 'border-b';
+            newRow.innerHTML = `
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td contenteditable="true" class="py-2 px-3"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 calc-cell"></td>
+                <td class="py-2 px-3 text-center"><span class="delete-row-btn">×</span></td>
+            `;
+            calibrationTableBody.appendChild(newRow);
+        }
+       
+        async function runOptimization() {
+            if (isCalculating) return;
+            isCalculating = true;
+            showLoading("Optimizing parameters...");
+ 
+            await new Promise(r => setTimeout(r, 0));
+ 
+            try {
+                const paramSteps = [1.0, 0.5, 0.1, 0.05, 0.01];
+                const min_a = 0.1, max_a = 10.0;
+                const min_sigma = 0.1, max_sigma = 10.0;
+               
+                let best_a = parseFloat(calA_Input.value);
+                let best_sigma = parseFloat(calSigma_Input.value);
+                let min_cost = calculateAndDisplayCalibration(best_a, best_sigma);
+               
+                let total_calcs = 0;
+ 
+                for (const step of paramSteps) {
+                    let moved = true;
+                    while (moved) {
+                        moved = false;
+                        total_calcs++;
+                        loadingMessage.textContent = `Optimizing... (Step: ${step}, Calc: ${total_calcs})`;
+                        await new Promise(r => setTimeout(r, 0));
+ 
+                        let current_best_cost = min_cost;
+                        let current_best_a = best_a;
+                        let current_best_sigma = best_sigma;
+                       
+                        const neighbors = [
+                            [best_a + step, best_sigma], [best_a - step, best_sigma],
+                            [best_a, best_sigma + step], [best_a, best_sigma - step]
+                        ];
+ 
+                        for (const [a_pct, sigma_pct] of neighbors) {
+                            const a_test = Math.max(min_a, Math.min(max_a, a_pct));
+                            const sigma_test = Math.max(min_sigma, Math.min(max_sigma, sigma_pct));
+                           
+                            const cost = calculateAndDisplayCalibration(a_test, sigma_test);
+                           
+                            if (cost < current_best_cost) {
+                                current_best_cost = cost;
+                                current_best_a = a_test;
+                                current_best_sigma = sigma_test;
+                                moved = true;
+                            }
+                        }
+                       
+                        best_a = current_best_a;
+                        best_sigma = current_best_sigma;
+                        min_cost = current_best_cost;
+                    }
+                }
+               
+                calA_Input.value = best_a.toFixed(2);
+                calSigma_Input.value = best_sigma.toFixed(2);
+               
+                calculateAndDisplayCalibration(best_a, best_sigma);
+ 
+                showCustomAlert(`Optimization complete. Best parameters found: a = ${best_a.toFixed(2)}%, sigma = ${best_sigma.toFixed(2)}%.`);
+                triggerFullCalculation();
+            } catch (e) {
+                showCustomAlert(`Optimization Error: ${e.message}`);
+            } finally {
+                isCalculating = false;
+                hideLoading();
+            }
+        }
+       
+        function calculateAndDisplayCalibration(a_percent, sigma_percent) {
+            if (globalCurveData.length === 0 && !parseDiscountCurve()) {
+                return Infinity;
+            }
+           
+            const a = (a_percent || parseFloat(calA_Input.value)) / 100.0;
+            const sigma = (sigma_percent || parseFloat(calSigma_Input.value)) / 100.0;
+           
+            if (isNaN(a) || isNaN(sigma)) {
+                return Infinity;
+            }
+ 
+            let totalCost = 0;
+            const rows = calibrationTableBody.querySelectorAll('tr');
+           
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                try {
+                    const T = parseFloat(cells[0].textContent);
+                    const tenor = parseFloat(cells[1].textContent);
+                    const K_rate = parseFloat(cells[2].textContent) / 100.0;
+                    const K_price = 1 / (1 + K_rate * tenor);
+                    const Bl_vol = parseFloat(cells[3].textContent) / 100.0;
+                    const s = T + tenor;
+ 
+                    if (isNaN(T) || isNaN(tenor) || isNaN(K_rate) || isNaN(Bl_vol)) {
+                        throw new Error("Invalid input in row.");
+                    }
+ 
+                    const PT = getP(T);
+                    const Ps = getP(s);
+                    const F = (PT / Ps - 1) / tenor;
+ 
+                    const d1_bl = (Math.log(F / K_rate) + 0.5 * Bl_vol * Bl_vol * T) / (Bl_vol * Math.sqrt(T));
+                    const d2_bl = d1_bl - Bl_vol * Math.sqrt(T);
+                    const Bl_Price = Ps * tenor * (F * NCD(d1_bl) - K_rate * NCD(d2_bl));
+                   
+                    const B_T_s = (1 - Math.exp(-a * (s - T))) / a;
+                    const sigmaP2 = sigma * sigma / (2 * a) * (1 - Math.exp(-2 * a * T)) * B_T_s * B_T_s;
+                    const sigmaP = Math.sqrt(sigmaP2);
+                    const d1_hw = (Math.log(Ps / (PT * K_price)) / sigmaP) + sigmaP / 2;
+                    const d2_hw = d1_hw - sigmaP;
+                   
+                    const HW_Price = PT * NCD(-d2_hw) - (Ps / K_price) * NCD(-d1_hw);
+                   
+                    const cost = Math.pow(Bl_Price - HW_Price, 2);
+                    totalCost += cost;
+ 
+                    cells[4].textContent = PT.toFixed(6);
+                    cells[5].textContent = Ps.toFixed(6);
+                    cells[6].textContent = (F * 100).toFixed(4);
+                    cells[7].textContent = (Bl_Price * 100).toFixed(6);
+                    cells[8].textContent = (HW_Price * 100).toFixed(6);
+                    cells[9].textContent = cost.toExponential(3);
+ 
+                } catch (e) {
+                    for (let i = 4; i <= 9; i++) cells[i].textContent = '';
+                }
+            });
+            calTotalCost.textContent = totalCost.toExponential(5);
+            return totalCost;
+        }
+ 
+        function calculateCallProbabilities(tree, callTimes) {
+            if (!tree || tree.length === 0 || !callTimes || callTimes.length === 0) {
+                return [];
+            }
+           
+            const callProbs = [];
+           
+            callTimes.forEach(time => {
+                const step = tree.find(s => Math.abs(s.t - time) < EPSILON);
+                if (!step) return;
+               
+                const P_0_t = step.nodes.reduce((sum, node) => sum + node.Q, 0);
+               
+                if (P_0_t < EPSILON) return;
+               
+                const Q_exercised = step.nodes.reduce((sum, node) => {
+                    return sum + (node.exercised ? node.Q : 0);
+                }, 0);
+               
+                const probability = Q_exercised / P_0_t;
+               
+                if (!isNaN(probability)) {
+                    callProbs.push({ time: time, probability: probability });
+                }
+            });
+           
+            return callProbs;
+        }
+ 
+        function clearAnalysisResults() {
+            document.getElementById('analysis_vanilla').textContent = '...';
+            document.getElementById('analysis_option').textContent = '...';
+            document.getElementById('analysis_callable').textContent = '...';
+            document.getElementById('analysis_implied_yield').textContent = '...';
+            document.getElementById('analysis_z_spread').textContent = '...';
+            document.getElementById('analysis_oas').textContent = '...';
+            document.getElementById('analysis_option_cost').textContent = '...';
+            document.getElementById('analysis_eff_duration').textContent = '...';
+           
+            document.getElementById('call-prob-container').innerHTML = '<p class="text-sm text-gray-500">...</p>';
+ 
+            if (!isUpdatingInputs) {
+                isUpdatingInputs = true;
+                modelPriceInput.value = '';
+                modelYieldInput.value = '';
+                spreadInput.value = '';
+                isUpdatingInputs = false;
+            }
+        }
+ 
+        function displayCallProbabilities(probs) {
+            const container = document.getElementById('call-prob-container');
+            if (!probs || probs.length === 0) {
+                container.innerHTML = `<p class="text-sm text-gray-500">No callable dates found or bond is not callable.</p>`;
+                return;
+            }
+           
+            container.innerHTML = '';
+            probs.forEach(prob => {
+                const probEl = document.createElement('div');
+                probEl.className = 'flex justify-between text-sm';
+                probEl.innerHTML = `
+                    <span class="text-gray-600">Call Date (Year ${prob.time.toFixed(2)}):</span>
+                    <strong class="text-gray-900">${(prob.probability * 100).toFixed(2)}%</strong>
+                `;
+                container.appendChild(probEl);
+            });
+        }
+ 
+        function displayAnalysisOnPricingTab(result) {
+            if (!result) {
+                clearAnalysisResults();
+                return;
+            }
+           
+            const { price, optionFreePrice, optionValue, impliedYield, oas, effDuration, callProbabilities, zSpreadBps } = result;
+ 
+            const formatNum = (num, decimals) => (typeof num === 'number' && !isNaN(num)) ? num.toFixed(decimals) : (typeof num === 'string' ? num : '');
+           
+            const optionCost = (typeof zSpreadBps === 'number' && typeof oas === 'number' && !isNaN(zSpreadBps) && !isNaN(oas)) ? zSpreadBps - oas : NaN;
+
+            // Result Tab
+            document.getElementById('analysis_vanilla').textContent = formatNum(optionFreePrice, 4);
+            document.getElementById('analysis_option').textContent = formatNum(optionValue, 4);
+            document.getElementById('analysis_callable').textContent = formatNum(price, 4);
+            document.getElementById('analysis_implied_yield').textContent = formatNum(impliedYield, 4);
+            document.getElementById('analysis_z_spread').textContent = formatNum(zSpreadBps, 2);
+            document.getElementById('analysis_oas').textContent = formatNum(oas, 2);
+            document.getElementById('analysis_option_cost').textContent = formatNum(optionCost, 2);
+            document.getElementById('analysis_eff_duration').textContent = formatNum(effDuration, 4);
+           
+            displayCallProbabilities(callProbabilities);
+ 
+            // Bond Tab (readonly inputs)
+            if (!isUpdatingInputs) {
+                isUpdatingInputs = true;
+                modelPriceInput.value = formatNum(price, 4);
+                modelYieldInput.value = formatNum(impliedYield, 4);
+                spreadInput.value = formatNum(oas, 2);
+                isUpdatingInputs = false;
+            }
+        }
+ 
+        function displayTree(result) {
+            treeContainer.innerHTML = '';
+           
+            if (!result || !result.tree || result.tree.length === 0) {
+                treeInfo.textContent = 'Tree data is not available. Please run a calculation.';
+                return;
+            }
+ 
+            const { tree, price } = result;
+            const firstStep = tree[0];
+            const firstStepNode = firstStep.nodes[0];
+           
+            const initialPu = firstStepNode?.pu !== undefined ? (firstStepNode.pu * 100).toFixed(2) : 'N/A';
+            const initialPm = firstStepNode?.pm !== undefined ? (firstStepNode.pm * 100).toFixed(2) : 'N/A';
+            const initialPd = firstStepNode?.pd !== undefined ? (firstStepNode.pd * 100).toFixed(2) : 'N/A';
+    
+            document.getElementById('tree-info').innerHTML = `
+                Model Price (Z-Spread Tree): <strong>${price.toFixed(6)}</strong> |
+                Time Step (dt): <strong>${firstStep.dt.toFixed(4)} years</strong> |
+                Initial Probs (Pu, Pm, Pd): <strong>${initialPu}%, ${initialPm}%, ${initialPd}%</strong>
+            `;
+ 
+            tree.forEach((step, stepIndex) => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'tree-step';
+               
+                const sortedNodes = [...step.nodes].sort((a, b) => (b.rate || 0) - (a.rate || 0));
+ 
+                sortedNodes.forEach(node => {
+                    const nodeDiv = document.createElement('div');
+                    nodeDiv.className = 'tree-node';
+                    if(node.exercised) {
+                        nodeDiv.classList.add('early-exercise');
+                    }
+    
+                    const probabilitiesHtml = node.pu !== undefined && stepIndex < tree.length - 1 ? `
+                        <div class="node-probabilities">
+                            Pu: ${(node.pu * 100).toFixed(2)}%<br>
+                            Pm: ${(node.pm * 100).toFixed(2)}%<br>
+                            Pd: ${(node.pd * 100).toFixed(2)}%
+                        </div>
+                    ` : '';
+    
+                    nodeDiv.innerHTML = `
+                    <div class="tree-node-content">
+                        <span class="price-label">t = ${step.t.toFixed(2)}, j = ${node.j}</span>
+                        <hr class="my-1">
+                        <div class="tree-data-vanilla">
+                            <span class="price-label">Vanilla Price</span>
+                            <div class="node-bond-price">${(node.pureBondPrice || 0).toFixed(4)}</div>
+                        </div>
+                        <div class="tree-data-callable">
+                            <span class="price-label">Callable Price</span>
+                            <div class="node-option-price">${(node.callablePrice || 0).toFixed(4)}</div>
+                        </div>
+                        <div class="tree-data-option">
+                            <span class="price-label">Option Value</span>
+                            <div class="node-option-value">${(node.optionValue || 0).toFixed(4)}</div>
+                        </div>
+                        <div class="tree-data-rate">
+                            <span class="price-label">Short Rate</span>
+                            <div class="node-rate">${(node.rate * 100).toFixed(3)}%</div>
+                        </div>
+                    </div>
+                    <div class="tree-data-probs">
+                        ${probabilitiesHtml}
+                    </div>
+                `;
+                    stepDiv.appendChild(nodeDiv);
+                });
+                treeContainer.appendChild(stepDiv);
+            });
+           
+            updateTreeView();
+        }
+       
+        function updateTreeView() {
+            const checkedToggles = {};
+            document.querySelectorAll('#tree-display-controls .tree-display-cb:checked').forEach(cb => {
+                const toggleType = cb.getAttribute('data-tree-toggle');
+                if (toggleType) {
+                    checkedToggles[toggleType] = true;
+                }
+            });
+           
+            document.querySelectorAll('#tree-container .tree-node').forEach(node => {
+                const selectors = ['vanilla', 'callable', 'option', 'rate', 'probs'];
+               
+                selectors.forEach(toggleType => {
+                    const selector = `.tree-data-${toggleType}`;
+                    const element = node.querySelector(selector);
+                    if (element) {
+                        element.style.display = checkedToggles[toggleType] ? 'block' : 'none';
+                    }
+                });
+            });
+        }
+       
+        function showCustomAlert(message) {
+            const existingAlert = document.querySelector('.custom-alert');
+            if (existingAlert) existingAlert.remove();
+            const alertBox = document.createElement('div');
+            alertBox.className = 'custom-alert';
+            alertBox.innerHTML = `
+                <div class="custom-alert-content">
+                    <span class="custom-alert-close-btn">&times;</span>
+                    <p class="text-gray-700">${message}</p>
+                </div>
+            `;
+            document.body.appendChild(alertBox);
+            const closeBtn = alertBox.querySelector('.custom-alert-close-btn');
+            closeBtn.onclick = () => alertBox.remove();
+            window.onclick = (event) => {
+                if (event.target === alertBox) alertBox.remove();
+            };
+            setTimeout(() => {
+                if (document.body.contains(alertBox)) alertBox.remove();
+            }, 5000);
+        }
+ 
+    </script>
 </body>
 </html>
