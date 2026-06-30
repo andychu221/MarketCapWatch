@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Cap Dashboard</title>
+    
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Material+Icons" />
+
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --text-primary: #2c3e50;
+            --text-secondary: #555;
+            --border-color: #e0e0e0;
+            --header-bg: #f8f9fa;
+            --hover-bg: #f5f5f5;
+            --modal-bg: #fefefe;
+            --modal-overlay-bg: rgba(0,0,0,0.6);
+            --button-bg: #f0f0f0;
+            --shadow-light: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-strong: 0 5px 20px rgba(0,0,0,0.3);
+            --primary-color: #4a90e2;
+            --positive-color: #28a745;
+            --negative-color: #dc3545;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+        .container { max-width: 1800px; margin: 0 auto; padding: 15px; }
+
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8); display: flex;
+            justify-content: center; align-items: center; flex-direction: column;
+            z-index: 9999; transition: opacity 0.3s ease; color: white;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2); width: 48px; height: 48px;
+            border-radius: 50%; border-left-color: var(--primary-color);
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-text { margin-top: 20px; font-size: 1.2rem; font-weight: 500; }
+
+        .main-content {
+            background: var(--bg-color); border-radius: 12px;
+            padding: 25px; box-shadow: var(--shadow-light);
+            margin-top: 10px;
+        }
+
+        .header-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--border-color); margin-bottom: 20px;
+            padding-bottom: 15px;
+        }
+
+        .header-bar h1 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .controls-input {
+            border: 1px solid var(--border-color); padding: 8px; border-radius: 6px; font-size: 0.95rem;
+            background-color: var(--bg-color); color: var(--text-primary);
+            display: inline-flex; align-items: center; gap: 5px; cursor: text;
+        }
+        button.controls-input { cursor: pointer; }
+        button.controls-input:hover { background: var(--hover-bg); }
+        
+        .icon-btn {
+            cursor: pointer; background: var(--button-bg); border: 1px solid var(--border-color); padding: 6px;
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-primary); transition: all 0.2s;
+            height: 38px; width: 38px; 
+        }
+        .icon-btn:hover { color: var(--primary-color); background: var(--hover-bg); }
+
+        .text-positive { color: var(--positive-color) !important; font-weight: 500; }
+        .text-negative { color: var(--negative-color) !important; font-weight: 500; }
+        
+        .modal {
+            position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto;
+            background-color: var(--modal-overlay-bg); opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .modal.show { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background-color: var(--modal-bg); margin: 5% auto; padding: 25px;
+            border-radius: 12px; width: 90%; max-width: 1000px; box-shadow: var(--shadow-strong);
+            position: relative; transform: translateY(-50px); transition: transform 0.3s ease-out;
+        }
+        .close { color: #aaa; position: absolute; top: 10px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
+
+        .email-report-btn {
+            background-color: var(--primary-color); color: white; border: none; padding: 8px 15px;
+            border-radius: 6px; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 5px; justify-content: center;
+        }
+        .email-report-btn:hover { background-color: #357abd; }
+
+        /* MARKET CAP TAB STYLES */
+        .mc-container {
+            background-color: white;
+            padding: 10px;
+            overflow-x: auto;
+            overflow-y: auto;
+            height: 80vh;
+            border: none;
+            border-radius: 8px;
+            position: relative;
+        }
+        .mc-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;
+        }
+        .mc-wrapper {
+            transform-origin: top left;
+            transition: transform 0.2s;
+            width: fit-content;
+            min-width: 100%;
+        }
+        .mc-grid-top {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .mc-block {
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .mc-block-title {
+            font-weight: bold; font-size: 1.1rem; margin-bottom: 2px;
+            padding-bottom: 2px;
+            text-align: center;
+            color: black;
+        }
+        .mc-block-subtitle {
+             font-size: 0.85rem; margin-bottom: 8px;
+             text-align: center; color: var(--text-secondary);
+             border-bottom: 2px solid black;
+             padding-bottom: 4px;
+        }
+        .mc-table {
+            width: 100%; border-collapse: collapse; font-size: 0.65rem; table-layout: auto;
+        }
+        .mc-table th, .mc-table td {
+            border: none;
+            padding: 2px 4px; text-align: center; white-space: nowrap; line-height: 1;
+        }
+        .mc-table th {
+            background-color: white; 
+            text-align: center; font-weight: 600;
+            border-bottom: 3px double black !important;
+            color: black;
+            min-width: 50px;
+        }
+        .mc-table th:first-child {
+            text-align: left;
+        }
+        .mc-table.no-date th:first-child, .mc-table.no-date td:first-child {
+            text-align: center !important;
+        }
+        .mc-table td:first-child {
+            text-align: left; font-weight: normal !important; background-color: white;
+        }
+        
+        @media print {
+            @page { size: landscape; margin: 5mm; }
+            body * { visibility: hidden; }
+            #market-cap, #market-cap * { visibility: visible; }
+            #market-cap { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; display: block !important; }
+            .header-bar, .mc-header { display: none !important; }
+            .mc-container { border: none; height: auto; overflow: visible; }
+            .mc-grid-top { display: flex; justify-content: space-between; gap: 20px; }
+            .mc-block { flex: 1; border: none; page-break-inside: avoid; }
+            .mc-table { font-size: 6pt; }
+            .mc-table th { resize: none; overflow: visible; }
+        }
+        
+        .mc-config-group { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .mc-config-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .mc-config-btn-small { padding: 2px 6px; font-size: 0.8rem; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px; }
+        .mc-config-btn-small:hover { background: #e0e0e0; }
+
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading latest data from GitHub...</p>
+    </div>
+
+    <div class="container">
+        <div class="main-content">
+            <div class="header-bar">
+                <h1><i class="material-icons" style="font-size: 28px; color: var(--primary-color);">pie_chart</i> Market Cap Dashboard</h1>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="controls-input" onclick="window.print()" title="Print to PDF/Paper">
+                        <i class="material-icons">print</i> Print / PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- MARKET CAP TAB -->
+            <div id="market-cap">
+                <div class="mc-header">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <label>As of:</label>
+                        <input type="date" id="mc-as-of-date" class="controls-input" onchange="renderMarketCapTab()">
+                        <button class="controls-input" onclick="openMarketCapConfig()" title="Configure Tickers"><i class="material-icons" style="font-size:16px;">settings</i> Configure</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <button class="icon-btn" onclick="zoomMarketCap(-0.1)" title="Zoom Out"><i class="material-icons">remove</i></button>
+                        <button class="icon-btn" onclick="zoomMarketCap(0.1)" title="Zoom In"><i class="material-icons">add</i></button>
+                    </div>
+                </div>
+                <div class="mc-container">
+                    <div class="mc-wrapper" id="mc-wrapper">
+                        <div class="mc-grid-top">
+                            <div class="mc-block" id="mc-group-0"></div>
+                            <div class="mc-block" id="mc-group-1"></div>
+                            <div class="mc-block" id="mc-group-2"></div>
+                            <div class="mc-block" id="mc-group-3"></div>
+                        </div>
+                        <div class="mc-block" id="mc-group-4"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="marketCapConfigModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeModal('marketCapConfigModal')">&times;</span>
+            <h2 style="margin-bottom: 20px;">Configure Market Cap Table</h2>
+            <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center;">
+                <label>Column Width:</label>
+                <input type="text" id="mc-col-width" class="controls-input" placeholder="e.g. 60px" style="width: 100px;">
+            </div>
+            <div id="mc-config-container" style="max-height: 500px; overflow-y: auto; padding-right: 10px;">
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="email-report-btn" onclick="saveMarketCapConfig()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TICKER_NAMES = {
+            '2330.TW': 'TSMC', 'TSM': 'TSMC ADR', 'TSM.N': 'TSMC ADR',
+            '.TWII': 'TWSE', '.SOX': 'SOX', '.SPX': 'S&P 500', '.MCI': 'MCI',
+            'NVDA': 'Nvidia', 'NVDA.O': 'Nvidia', 
+            'AAPL': 'Apple', 'AAPL.O': 'Apple', 
+            'AVGO': 'Broadcom', 'AVGO.O': 'Broadcom',
+            'QCOM': 'Qualcomm', 'QCOM.O': 'Qualcomm',
+            'AMD': 'AMD', 'AMD.O': 'AMD',
+            'LRCX': 'Lam', 'LRCX.O': 'Lam',
+            'ADI': 'ADI', 'ADI.O': 'ADI',
+            '2454.TW': 'MediaTek',
+            '6723.T': 'Renesas', 
+            '8035.T': 'TEL',
+            'INTC': 'Intel', 'INTC.O': 'Intel',
+            '005930.KS': 'Samsung',
+            '2303.TW': 'UMC', '0981.HK': 'SMIC-H', '688981.SS': 'SMIC-A', 'GFS': 'GFS',
+            'MSFT': 'Microsoft', 'GOOGL': 'Google', 'AMZN': 'Amazon', 'META': 'Meta', 'TSLA': 'Tesla',
+            'AMAT': 'AMAT', 'KLAC': 'KLAC', 'CSCO': 'Cisco', 'BTDR': 'Bitdeer', 'SIMO': 'Silicon',
+            'ASML.AS': 'ASML', '5347.TWO': 'Vanguard', '3443.TW': 'GUC', '3374.TWO': 'Xintec',
+            '6789.TW': 'VisEra', '3661.TW': 'Alchip', '603501.SS': 'Willsemi', '6758.T': 'Sony',
+            '6526.T': 'Socionext', '000660.KS': 'SK hynix', 'MU': 'Micron', 'NXPI': 'NXP',
+            '2388.TW': 'VIA','2379.TW': 'Realtek','STM': 'STM','NOD.OL': 'Nordic','CRUS': 'Cirrus',
+            '108320.KS': 'LX Semicon', '688099.SS': 'Amlogic', '688213.SS': 'Smartsens', '000063.SZ': 'ZTE','688220.SS': 'ASR',
+            '2344.TW': 'Winbond', '2408.TW': 'Nanya', 'SNDK': 'Sandisk','SNDK.O': 'Sandisk',
+            'TXN': 'TI', 'MRVL': 'Marvell', 'ON': 'ON Semi', 'MCHP': 'Microchip',
+            'TER': 'Teradyne', 'SWKS': 'Skyworks', 'MPWR': 'Monolithic Power',
+            'ENTG': 'Entegris', 'QRVO': 'Qorvo', 'WOLF': 'Wolfspeed', 'ENPH': 'Enphase'
+        };
+
+        const INDEX_TICKERS = ['.TWII', '.SOX', '.SPX', '.MCI'];
+        
+        let marketCapGroups = {
+            0: { title: 'Benchmark Index', subtitle: 'Close', tickers: ['.SPX', '.SOX', '.TWII'], showDate: true, valueType: 'price' },
+            1: { title: 'Foundry', subtitle: 'Market Cap(US$B)', tickers: ['2330.TW', '005930.KS', 'INTC', '2303.TW', 'GFS', '688981.SS'], showDate: false, valueType: 'mc' },
+            2: { title: 'Semi Equipment Players', subtitle: 'Market Cap(US$B)', tickers: ['ASML.AS', 'AMAT', 'KLAC', 'MU'], showDate: false, valueType: 'mc' },
+            3: { title: 'Affiliates', subtitle: 'Market Cap(US$B)', tickers: ['5347.TWO', '3443.TW', '3374.TWO', '6789.TW'], showDate: false, valueType: 'mc' },
+            4: { title: 'Top 20', subtitle: 'Market Cap(US$B)', tickers: [
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 
+                'AVGO', 'AMD', 'INTC', '2454.TW', '3661.TW', '603501.SS', '6758.T', '6723.T', 
+                '6526.T', '000660.KS', 'ADI', 'NXPI', 'CSCO'
+            ], showDate: true, valueType: 'mc' }
+        };
+        
+        let mcColumnMinWidth = '50px';
+        let mcZoomLevel = 1.0;
+
+        let allData = [];
+        let dataByTicker = {}; 
+        let fxData = {}; 
+        let allPerformanceData = new Map(); 
+        let latestDataDate = null;
+        let summaryReferenceDate = null;
+        let tickerMetadata = {};
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllDataFromGitHub();
+        });
+
+        async function fetchJsonWithRetry(url) {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) return null; 
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        async function loadAllDataFromGitHub() {
+            const urls = [
+                'https://raw.githubusercontent.com/andychu221/yhfinance-fred-data/main/market_data/Equity_Index.json',
+                'https://raw.githubusercontent.com/andychu221/yhfinance-fred-data/main/market_data/TW_Stocks.json',
+                'https://raw.githubusercontent.com/andychu221/yhfinance-fred-data/main/market_data/US_Stocks.json',
+                'https://raw.githubusercontent.com/andychu221/yhfinance-fred-data/main/market_data/FX.json'
+            ];
+
+            const loading = document.getElementById('loading-overlay');
+            const status = document.getElementById('loading-text');
+
+            try {
+                status.innerText = "Fetching Market Data...";
+                const results = await Promise.all(urls.map(u => fetchJsonWithRetry(u)));
+                
+                allData = [];
+                dataByTicker = {};
+                fxData = results[3] || {}; 
+
+                results.slice(0,3).forEach((json, idx) => {
+                    if (!json) return;
+                    const market = idx === 0 ? 'Equity Index' : (idx === 1 ? 'TW Stocks' : 'US Stocks');
+                    Object.entries(json).forEach(([rawTicker, data]) => {
+                        let cleanTicker = rawTicker;
+                        if (rawTicker.endsWith('.O') || rawTicker.endsWith('.N')) {
+                            cleanTicker = rawTicker.split('.')[0];
+                        }
+                        if (cleanTicker === 'TSM.N') cleanTicker = 'TSM';
+                        if (cleanTicker === '0059.KS') cleanTicker = '005930.KS';
+
+                        processTickerData(cleanTicker, data, market);
+                    });
+                });
+
+                // Calculate latestDataDate
+                let maxDate = 0;
+                Object.keys(dataByTicker).forEach(t => {
+                    dataByTicker[t].sort((a,b) => a.date - b.date);
+                    if (dataByTicker[t].length) {
+                        const d = dataByTicker[t][dataByTicker[t].length-1].date.getTime();
+                        if (d > maxDate) maxDate = d;
+                    }
+                });
+                latestDataDate = new Date(maxDate);
+                summaryReferenceDate = latestDataDate;
+
+                document.getElementById('mc-as-of-date').value = formatDateYYYYMMDD(latestDataDate);
+
+                processPerformanceData();
+                renderMarketCapTab();
+                
+                loading.style.display = 'none';
+
+            } catch (e) {
+                status.innerText = "Error loading data: " + e.message;
+                console.error(e);
+            }
+        }
+
+        function processTickerData(ticker, raw, market) {
+            if (!raw || !raw.date || !raw.close) return;
+            
+            tickerMetadata[ticker] = { 
+                float: parseMetric(raw.float),
+                shares: parseMetric(raw.sharesOutstanding)
+            };
+            const closes = raw.close;
+            const dates = raw.date;
+            
+            const cleanData = [];
+            
+            dates.forEach((dStr, i) => {
+                if (dStr.includes(' ') || dStr.includes('T')) return;
+
+                const price = closes[i];
+                if (price == null) return;
+                const date = new Date(dStr); 
+                
+                cleanData.push({ 
+                    ticker, date, price, originalDateStr: dStr, market 
+                });
+            });
+            if (!dataByTicker[ticker]) dataByTicker[ticker] = [];
+            dataByTicker[ticker] = dataByTicker[ticker].concat(cleanData);
+            allData = allData.concat(cleanData);
+        }
+
+        function parseMetric(val) {
+            if (!val) return null;
+            if (typeof val === 'number') return val;
+            let mult = 1;
+            if (val.endsWith('B')) mult = 1e9;
+            if (val.endsWith('M')) mult = 1e6;
+            return parseFloat(val.replace(/[BM,]/g, '')) * mult;
+        }
+
+        function getFxRate(targetCurrency, date) {
+            if (targetCurrency === 'USD') return 1;
+            
+            let fxTicker = '';
+            if (targetCurrency === 'TWD') fxTicker = 'TWD=';
+            else if (targetCurrency === 'JPY') fxTicker = 'JPY=';
+            else if (targetCurrency === 'KRW') fxTicker = 'KRW=';
+            else if (targetCurrency === 'CNY') fxTicker = 'CNY=';
+            else if (targetCurrency === 'HKD') fxTicker = 'HKD=';
+            else if (targetCurrency === 'EUR') fxTicker = 'EUR=';
+            else return 1;
+
+            const rates = fxData[fxTicker];
+            if (!rates || !rates.close || !rates.date) return 1;
+
+            const targetTime = date.getTime();
+            let foundRate = 1;
+            
+            for (let i = rates.date.length - 1; i >= 0; i--) {
+                const dStr = rates.date[i];
+                const d = new Date(dStr.includes(' ') ? dStr.split(' ')[0] : dStr).getTime();
+                if (d <= targetTime) {
+                    foundRate = rates.close[i];
+                    break;
+                }
+            }
+            return foundRate;
+        }
+
+        function getBlendedMarketCap(date) {
+            const tsmcTwTicker = '2330.TW';
+            const tsmcAdrTicker = 'TSM';
+            
+            const getPrice = (t, d) => {
+                const perf = allPerformanceData.get(t);
+                if (perf) return perf.findPriceOnOrBefore(d);
+                return null;
+            };
+
+            const priceTw = getPrice(tsmcTwTicker, date);
+            const priceAdr = getPrice(tsmcAdrTicker, date);
+            const sharesTw = tickerMetadata[tsmcTwTicker]?.shares;
+            const twdRate = getFxRate('TWD', date);
+
+            if (priceTw && priceAdr && sharesTw && twdRate) {
+                const adrCommonShares = sharesTw / 5;
+                const localCommonShares = sharesTw - adrCommonShares;
+                const term1 = (priceTw / twdRate) * localCommonShares;
+                const term2 = priceAdr * (adrCommonShares / 5);
+                return term1 + term2;
+            }
+            return null;
+        }
+        
+        function calculateMarketCapNumeric(ticker, price, date) {
+             if (INDEX_TICKERS.includes(ticker)) return -1;
+             if (ticker === '2330.TW' || ticker === 'TSM') {
+                 const blended = getBlendedMarketCap(date);
+                 if (blended !== null) return blended;
+             }
+             const meta = tickerMetadata[ticker];
+             if (!meta || !meta.shares) return -1;
+             
+             let currency = 'USD';
+             if (ticker.endsWith('.TW')) currency = 'TWD';
+             else if (ticker.endsWith('.TWO')) currency = 'TWD';
+             else if (ticker.endsWith('.T')) currency = 'JPY';
+             else if (ticker.endsWith('.KS')) currency = 'KRW';
+             else if (ticker.endsWith('.SS')) currency = 'CNY';
+             else if (ticker.endsWith('.SZ')) currency = 'CNY';
+             else if (ticker.endsWith('.AS')) currency = 'EUR';
+             else if (ticker.endsWith('.OL')) currency = 'EUR';
+            
+             const rate = getFxRate(currency, date);
+             if (!rate || rate === 0) return -1;
+             
+             return (price * meta.shares) / rate;
+        }
+
+        function processPerformanceData() {
+            allPerformanceData.clear();
+            Object.keys(dataByTicker).forEach(ticker => {
+                const data = dataByTicker[ticker];
+                if (!data || data.length === 0) return;
+                const market = data[0].market;
+                allPerformanceData.set(ticker, calculatePerformanceForTicker(ticker, data, market));
+            });
+        }
+
+        function calculatePerformanceForTicker(ticker, tickerData, market) {
+            const findPriceOnOrBefore = (date) => {
+                if (!date) return null;
+                const target = date.getTime();
+                for (let i = tickerData.length - 1; i >= 0; i--) {
+                    if (tickerData[i].date.getTime() <= target) return tickerData[i].price;
+                }
+                return null;
+            };
+
+            const findActualDataPoint = (date) => {
+                 if (!date) return null;
+                 const target = date.getTime();
+                 for (let i = tickerData.length - 1; i >= 0; i--) {
+                    if (tickerData[i].date.getTime() <= target) return tickerData[i];
+                 }
+                 return null;
+            };
+            
+            return { ticker, name: TICKER_NAMES[ticker] || ticker, findPriceOnOrBefore, findActualDataPoint };
+        }
+        
+        function zoomMarketCap(delta) {
+            mcZoomLevel += delta;
+            if (mcZoomLevel < 0.5) mcZoomLevel = 0.5;
+            if (mcZoomLevel > 1.5) mcZoomLevel = 1.5;
+            document.getElementById('mc-wrapper').style.transform = `scale(${mcZoomLevel})`;
+        }
+        
+        function openMarketCapConfig() {
+            renderMarketCapConfigUI();
+            const modal = document.getElementById('marketCapConfigModal');
+            modal.style.display = 'block'; setTimeout(() => modal.classList.add('show'), 10);
+        }
+
+        function renderMarketCapConfigUI() {
+            document.getElementById('mc-col-width').value = mcColumnMinWidth;
+            const container = document.getElementById('mc-config-container');
+            container.innerHTML = '';
+
+            Object.keys(marketCapGroups).forEach(groupId => {
+                const group = marketCapGroups[groupId];
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'mc-config-group';
+                
+                let html = `<h4>${group.title}</h4><div style="margin-top:5px;">`;
+                
+                group.tickers.forEach((t, index) => {
+                    const name = TICKER_NAMES[t] || t;
+                    html += `
+                    <div class="mc-config-row">
+                        <button class="mc-config-btn-small" onclick="moveMcTicker(${groupId}, ${index}, -1)">↑</button>
+                        <button class="mc-config-btn-small" onclick="moveMcTicker(${groupId}, ${index}, 1)">↓</button>
+                        <span style="width: 80px; font-weight:bold;">${t}</span>
+                        <input type="text" class="controls-input" value="${name}" onchange="updateMcTickerName('${t}', this.value)" style="flex:1;">
+                        <button class="mc-config-btn-small" style="color:red;" onclick="removeMcTicker(${groupId}, ${index})">✕</button>
+                    </div>`;
+                });
+
+                html += `
+                    <div class="mc-config-row" style="margin-top:10px;">
+                        <input type="text" id="add-ticker-input-${groupId}" class="controls-input" placeholder="Ticker (e.g. AAPL)" style="width:120px;">
+                        <button class="mc-config-btn-small" onclick="addMcTicker(${groupId})">Add Ticker</button>
+                    </div>
+                </div>`;
+                
+                groupDiv.innerHTML = html;
+                container.appendChild(groupDiv);
+            });
+        }
+
+        function moveMcTicker(groupId, index, dir) {
+            const list = marketCapGroups[groupId].tickers;
+            if (dir === -1 && index > 0) {
+                [list[index], list[index-1]] = [list[index-1], list[index]];
+            } else if (dir === 1 && index < list.length - 1) {
+                [list[index], list[index+1]] = [list[index+1], list[index]];
+            }
+            renderMarketCapConfigUI();
+        }
+
+        function removeMcTicker(groupId, index) {
+            marketCapGroups[groupId].tickers.splice(index, 1);
+            renderMarketCapConfigUI();
+        }
+
+        function addMcTicker(groupId) {
+            const input = document.getElementById(`add-ticker-input-${groupId}`);
+            const val = input.value.trim().toUpperCase();
+            if (val && !marketCapGroups[groupId].tickers.includes(val)) {
+                marketCapGroups[groupId].tickers.push(val);
+                renderMarketCapConfigUI();
+            }
+        }
+        
+        function updateMcTickerName(ticker, newName) {
+            TICKER_NAMES[ticker] = newName; 
+        }
+
+        function saveMarketCapConfig() {
+            mcColumnMinWidth = document.getElementById('mc-col-width').value || '50px';
+            closeModal('marketCapConfigModal');
+            renderMarketCapTab();
+        }
+
+        function renderMarketCapTab() {
+            const dateInput = document.getElementById('mc-as-of-date').value;
+            const anchorDate = dateInput ? new Date(dateInput) : summaryReferenceDate;
+            
+            if (!anchorDate || isNaN(anchorDate)) return; // wait for data loading
+
+            const dates = generateMarketCapDates(anchorDate);
+            
+            const styleId = 'dynamic-mc-style';
+            let styleTag = document.getElementById(styleId);
+            if(!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = styleId;
+                document.head.appendChild(styleTag);
+            }
+            styleTag.innerHTML = `.mc-table th { min-width: ${mcColumnMinWidth} !important; }`;
+
+            Object.keys(marketCapGroups).forEach(groupId => {
+                const group = marketCapGroups[groupId];
+                const container = document.getElementById(`mc-group-${groupId}`);
+                
+                let html = `<div class="mc-block-title">${group.title}</div>`;
+                if(group.subtitle) {
+                    html += `<div class="mc-block-subtitle">${group.subtitle}</div>`;
+                }
+                
+                const tableClass = group.showDate ? 'mc-table' : 'mc-table no-date';
+                html += `<table class="${tableClass}"><thead><tr>`;
+                
+                if (group.showDate) {
+                    html += `<th style="width:120px;">Date/Ticker</th>`;
+                }
+                group.tickers.forEach(t => {
+                    html += `<th>${TICKER_NAMES[t] || t}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                
+                const getValue = (ticker, dObj) => {
+                    if (group.valueType === 'price') {
+                         const perf = allPerformanceData.get(ticker);
+                         if (!perf) return null;
+                         const price = perf.findPriceOnOrBefore(dObj.date); 
+                         return price;
+                    } else {
+                        return getHistoricalMarketCap(ticker, dObj.date);
+                    }
+                };
+
+                const formatVal = (val) => {
+                    if (val === null) return '-';
+                    if (group.valueType === 'price') {
+                         return formatNumberWithCommas(val, 2);
+                    } else {
+                         return val.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                    }
+                };
+
+                html += `<tr>`;
+                if(group.showDate) html += `<td>${formatDateSlash(dates[0].date)}</td>`;
+                group.tickers.forEach(t => {
+                    html += `<td>${formatVal(getValue(t, dates[0]))}</td>`;
+                });
+                html += '</tr>';
+
+                html += `<tr>`;
+                if(group.showDate) html += `<td>WoW</td>`;
+                group.tickers.forEach(t => {
+                    const val1 = getValue(t, dates[0]);
+                    const val2 = getValue(t, dates[1]);
+                    let changeStr = '-';
+                    if (val1 !== null && val2 !== null && val2 !== 0) {
+                        const diff = val1 - val2;
+                        const pct = (diff / val2) * 100;
+                        const color = pct >= 0 ? 'text-positive' : 'text-negative';
+                        changeStr = `<span class="${color}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+                    }
+                    html += `<td>${changeStr}</td>`;
+                });
+                html += '</tr>';
+                
+                for (let i = 1; i < dates.length; i++) {
+                    const dObj = dates[i];
+                    html += `<tr>`;
+                    if(group.showDate) html += `<td>${formatDateSlash(dObj.date)}</td>`;
+                    group.tickers.forEach(t => {
+                         html += `<td>${formatVal(getValue(t, dObj))}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            });
+        }
+        
+        function getFirstTradingDay(year) {
+            const referenceTickers = ['2330.TW', '.TWII', '.SPX', 'AAPL'];
+            let data = null;
+            for (const t of referenceTickers) {
+                 if (dataByTicker[t] && dataByTicker[t].length > 0) {
+                     data = dataByTicker[t];
+                     break;
+                 }
+            }
+            if (!data) return new Date(year, 0, 1); 
+            const startOfYear = new Date(year, 0, 1);
+            const endOfYear = new Date(year, 11, 31);
+            
+             const entry = data.find(d => d.date >= startOfYear && d.date <= endOfYear);
+             
+             if (entry) return entry.date;
+             return new Date(year, 0, 1);
+        }
+   
+        function generateMarketCapDates(anchorDate) {
+            const dates = [];
+            
+            const d1 = new Date(anchorDate);
+            dates.push({ label: 'Current', date: new Date(d1) });
+            
+            const d2 = new Date(d1);
+            d2.setDate(d2.getDate() - 7);
+            dates.push({ label: 'WoW', date: d2 });
+            
+            const currentYear = d1.getFullYear();
+            const d3 = getFirstTradingDay(currentYear);
+            dates.push({ label: formatDateSlash(d3), date: d3 });
+            
+            for (let y = currentYear - 1; y >= 2011; y--) {
+                const d = getFirstTradingDay(y);
+                dates.push({ label: formatDateSlash(d), date: d });
+            }
+            
+            return dates;
+        }
+        
+        function getHistoricalMarketCap(ticker, targetDate) {
+            const perf = allPerformanceData.get(ticker);
+            if (!perf) return null;
+            
+            const price = perf.findPriceOnOrBefore(targetDate);
+            if (!price) return null;
+            
+            const pt = perf.findActualDataPoint(targetDate);
+            const actualDate = pt ? pt.date : targetDate;
+            
+            const val = calculateMarketCapNumeric(ticker, price, actualDate);
+            if (val === -1 || val === null) return null;
+            
+            return val / 1e9;
+        }
+
+        // Utils
+        function closeModal(id) { 
+            document.getElementById(id).classList.remove('show'); 
+            setTimeout(() => document.getElementById(id).style.display='none', 300); 
+        }
+        function formatNumberWithCommas(x, decimals) { 
+            if (x == null) return '-'; 
+            return x.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }); 
+        }
+        function formatDateYYYYMMDD(date) { 
+            if (!date) return '';
+            return date.toISOString().split('T')[0]; 
+        }
+        function formatDateSlash(date) { 
+            if (!date) return '';
+            const m = date.getMonth()+1; 
+            const d = date.getDate(); 
+            return `${date.getFullYear()}/${m}/${d}`; 
+        }
+    </script>
+</body>
+</html>
